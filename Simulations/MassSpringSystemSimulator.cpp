@@ -75,10 +75,10 @@ void MassSpringSystemSimulator::notifyCaseChanged(int testCase)
 		msss->setIntegrator(EULER);
 		msss->simulateTimestep(0.1f);
 		std::cout << "\nSimulation State after one step (h=0.1f, EULER)\n" <<
-			"P(" << mp1 << ").position = " << msss->getPositionOfMassPoint(mp1).toString() << "\n" << 
-			"P(" << mp1 << ").velocity = " << msss->getVelocityOfMassPoint(mp1).toString() << "\n" <<
-			"P(" << mp2 << ").position = " << msss->getPositionOfMassPoint(mp2).toString() << "\n" <<
-			"P(" << mp2 << ").velocity = " << msss->getVelocityOfMassPoint(mp2).toString() << std::endl;
+			"  P[" << mp1 << "].position = " << msss->getPositionOfMassPoint(mp1).toString() << "\n" << 
+			"  P[" << mp1 << "].velocity = " << msss->getVelocityOfMassPoint(mp1).toString() << "\n" <<
+			"  P[" << mp2 << "].position = " << msss->getPositionOfMassPoint(mp2).toString() << "\n" <<
+			"  P[" << mp2 << "].velocity = " << msss->getVelocityOfMassPoint(mp2).toString() << std::endl;
 		delete msss;
 
 		// MIDPOINT:
@@ -89,10 +89,10 @@ void MassSpringSystemSimulator::notifyCaseChanged(int testCase)
 		msss->setIntegrator(MIDPOINT);
 		msss->simulateTimestep(0.1f);
 		std::cout << "\nSimulation State after one step (h=0.1f, MIDPOINT)\n" <<
-			"P(" << mp1 << ").position = " << msss->getPositionOfMassPoint(mp1).toString() << "\n" <<
-			"P(" << mp1 << ").velocity = " << msss->getVelocityOfMassPoint(mp1).toString() << "\n" <<
-			"P(" << mp2 << ").position = " << msss->getPositionOfMassPoint(mp2).toString() << "\n" <<
-			"P(" << mp2 << ").velocity = " << msss->getVelocityOfMassPoint(mp2).toString() << std::endl;
+			"  P[" << mp1 << "].position = " << msss->getPositionOfMassPoint(mp1).toString() << "\n" <<
+			"  P[" << mp1 << "].velocity = " << msss->getVelocityOfMassPoint(mp1).toString() << "\n" <<
+			"  P[" << mp2 << "].position = " << msss->getPositionOfMassPoint(mp2).toString() << "\n" <<
+			"  P[" << mp2 << "].velocity = " << msss->getVelocityOfMassPoint(mp2).toString() << "\n" << std::endl;
 		delete msss;
 
 		// Demo 1 is a one shot => once done we switch to another testcase
