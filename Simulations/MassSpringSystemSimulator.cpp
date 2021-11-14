@@ -130,22 +130,26 @@ void MassSpringSystemSimulator::notifyCaseChanged(int testCase)
 void MassSpringSystemSimulator::initUI(DrawingUtilitiesClass* DUC)
 {
 	this->DUC = DUC;
+	// integrator selector
+	TwAddSeparator(DUC->g_pTweakBar, "", "");
+	TwAddButton(DUC->g_pTweakBar, "Use EULER", [](void* s) { *((int*)s) = EULER; }, &m_iIntegrator, "");
+	TwAddButton(DUC->g_pTweakBar, "Use MIDPOINT", [](void* s) { *((int*)s) = MIDPOINT; }, &m_iIntegrator, "");
+	TwAddVarRW(DUC->g_pTweakBar, "Damping Factor", TW_TYPE_FLOAT, &m_fDamping, "step=0.05 min=0.0");
 	switch (m_iTestCase)
 	{
 	case 0: // Demo 1: Nothing rendered
 		break;
 	case 1: // Demo 2: Just render simple EULER simulation
+	case 2: // Demo 3: Just render simple MIDPOINT simulation
 		// Render options: TODO
 		//  render masspoint mass depending on radius
 		//   float radius_factor, radius_mass_factor
 		//  render spring thickness depending on stiffness
 		//  render spring color depending on generated force
-		break;
-	case 2: // Demo 3: Just render simple MIDPOINT simulation
+
 		break;
 	case 3:
-		//TwAddVarRW(DUC->g_pTweakBar, "Num Spheres", TW_TYPE_INT32, &m_iNumSpheres, "min=1");
-		//TwAddVarRW(DUC->g_pTweakBar, "Sphere Size", TW_TYPE_FLOAT, &m_fSphereSize, "min=0.01 step=0.01");
+		//TwAddVarRW(DUC->g_pTweakBar, "Cube Resolution", TW_TYPE_INT32, &m_iCubeResolution, "min=1");
 		break;
 	default:
 		break;
@@ -161,7 +165,6 @@ void MassSpringSystemSimulator::drawFrame(ID3D11DeviceContext* pd3dImmediateCont
 	//const Vec3 darkturquoise = Vec3(0.0f, 206.0f / 255.0f, 209.0f / 255.0f);
 
 	const Vec3 lilac = Vec3(0x7D, 0x4F, 0xB0) / 255.0f; // #7D4FB0
-	//const Vec3 lightlilac = Vec3(0xA2, 0x81, 0xC7) / 255.0f; // #A281C7
 	const Vec3 lightlilac = Vec3(0x90, 0x68, 0xBB) / 255.0f; // #9068BB
 	const Vec3 green = Vec3(0x7B, 0xBB, 0x44) / 255.0f; // #7BBB44
 	const Vec3 red = Vec3(0xBB, 0x48, 0x44) / 255.0f; // ##BB4844
@@ -249,7 +252,10 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 		}
 		
 		// calc external forces
-		//  damping
+		//  damping  F_damp(t)=-m_fDamping*v(t)
+		for (int i = 0; i < m_iCountMassPoints; i++) {
+			m_MassPoints[i].force += -m_fDamping * m_MassPoints[i].velocity;
+		}
 		//  user interaction
 		//  gravity (add directly to acceleration!)
 
@@ -327,7 +333,10 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 		}
 
 		// calc external forces
-		//  damping
+		//  damping  F_damp(t)=-m_fDamping*v(t)
+		for (int i = 0; i < m_iCountMassPoints; i++) {
+			m_MassPoints[i].force += -m_fDamping * m_MassPoints[i].velocity;
+		}
 		//  user interaction
 		//  gravity (add directly to acceleration!)
 		
@@ -392,7 +401,10 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 		}
 
 		// calc external forces
-		//  damping
+		//  damping  F_damp(t)=-m_fDamping*v(t)
+		for (int i = 0; i < m_iCountMassPoints; i++) {
+			m_MassPoints[i].force += -m_fDamping * m_MassPoints[i].velocity;
+		}
 		//  user interaction
 		//  gravity (add directly to acceleration!)
 		
