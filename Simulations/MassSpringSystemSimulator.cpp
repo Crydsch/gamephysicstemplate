@@ -67,6 +67,7 @@ void MassSpringSystemSimulator::notifyCaseChanged(int testCase)
 	case 0: /* Demo 1 */
 		// 2 mass points w/ 1 spring
 		// We construct our own Simulator similar to the Visual Studio Testcases
+		
 		// EULER:
 		msss = new MassSpringSystemSimulator();
 		mp1 = msss->addMassPoint(10, Vec3(0, 0, 0), Vec3(-1, 0, 0), false);
@@ -99,6 +100,27 @@ void MassSpringSystemSimulator::notifyCaseChanged(int testCase)
 		g_iTestCase = 1;
 		notifyCaseChanged(g_iTestCase);
 		break;
+
+	case 1: /* Demo 2 */
+		// 2 mass points w/ 1 spring
+		// Run and render the simulation
+
+		mp1 = addMassPoint(10, Vec3(0, 0, 0), Vec3(-1, 0, 0), false);
+		mp2 = addMassPoint(10, Vec3(0, 2, 0), Vec3(1, 0, 0), false);
+		addSpring(40, mp1, mp2, 1);
+		setIntegrator(EULER);
+		break;
+
+	case 2: /* Demo 3 */
+		// 2 mass points w/ 1 spring
+		// Run and render the simulation
+
+		mp1 = addMassPoint(10, Vec3(0, 0, 0), Vec3(-1, 0, 0), false);
+		mp2 = addMassPoint(10, Vec3(0, 2, 0), Vec3(1, 0, 0), false);
+		addSpring(40, mp1, mp2, 1);
+		setIntegrator(MIDPOINT);
+		break;
+
 	default:
 		std::cerr << "Unknown TestCase selected: " << testCase << std::endl;
 		break;
@@ -107,10 +129,58 @@ void MassSpringSystemSimulator::notifyCaseChanged(int testCase)
 
 void MassSpringSystemSimulator::initUI(DrawingUtilitiesClass* DUC)
 {
+	this->DUC = DUC;
+	switch (m_iTestCase)
+	{
+	case 0: // Demo 1: Nothing rendered
+		break;
+	case 1: // Demo 2: Just render simple EULER simulation
+		// Render options: TODO
+		//  render masspoint mass depending on radius
+		//   float radius_factor, radius_mass_factor
+		//  render spring thickness depending on stiffness
+		//  render spring color depending on generated force
+		break;
+	case 2: // Demo 3: Just render simple MIDPOINT simulation
+		break;
+	case 3:
+		//TwAddVarRW(DUC->g_pTweakBar, "Num Spheres", TW_TYPE_INT32, &m_iNumSpheres, "min=1");
+		//TwAddVarRW(DUC->g_pTweakBar, "Sphere Size", TW_TYPE_FLOAT, &m_fSphereSize, "min=0.01 step=0.01");
+		break;
+	default:
+		break;
+	}
 }
 
 void MassSpringSystemSimulator::drawFrame(ID3D11DeviceContext* pd3dImmediateContext)
 {
+	// We always render all MassPoints as spheres (BONUS: radius == mass)
+	//  and all Springs als lines between the spheres (BONUS: thickness == stiffness, color == force generated)
+
+	//const Vec3 turquoise = Vec3(64.0f / 255.0f, 224.0f / 255.0f, 208.0f / 255.0f);
+	//const Vec3 darkturquoise = Vec3(0.0f, 206.0f / 255.0f, 209.0f / 255.0f);
+
+	const Vec3 lilac = Vec3(0x7D, 0x4F, 0xB0) / 255.0f; // #7D4FB0
+	//const Vec3 lightlilac = Vec3(0xA2, 0x81, 0xC7) / 255.0f; // #A281C7
+	const Vec3 lightlilac = Vec3(0x90, 0x68, 0xBB) / 255.0f; // #9068BB
+	const Vec3 green = Vec3(0x7B, 0xBB, 0x44) / 255.0f; // #7BBB44
+	const Vec3 red = Vec3(0xBB, 0x48, 0x44) / 255.0f; // ##BB4844
+	const Vec3 blue = Vec3(0x44, 0xB7, 0xBB) / 255.0f; // ##44B7BB
+
+	// render mass points
+	for (int i = 0; i < m_iCountMassPoints; i++) {
+		DUC->setUpLighting(Vec3(), 0.4 * lightlilac, 100, 0.6 * lilac);
+		DUC->drawSphere(m_MassPoints[i].position, Vec3(0.05f));
+	}
+
+	// render springs
+	DUC->beginLine();
+	for (int i = 0; i < m_iCountSprings; i++) {
+		MassPoint& mp1 = m_MassPoints[m_Springs[i].masspoint1];
+		MassPoint& mp2 = m_MassPoints[m_Springs[i].masspoint2];
+		DUC->drawLine(mp1.position, green, mp2.position, green);
+	}
+	DUC->endLine();
 }
 
 void MassSpringSystemSimulator::externalForcesCalculations(float timeElapsed)
@@ -509,6 +579,7 @@ void MassSpringSystemSimulator::applyExternalForce(Vec3 force)
 {
 	// Sets static global external force (aka gravity)
 	// will be applied to every mass point, every time step
-	// Note: force is handled as direct acceleration, since a real force would be mass dependent
+	// Note: A real force would be mass dependent,
+	// => You should not use this function. 
 	m_externalForce = force;
 }
