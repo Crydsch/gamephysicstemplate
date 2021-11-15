@@ -45,6 +45,7 @@ public:
 	// This adds a global external force which is applied to every
 	//  every masspoint in every timestep.
 	// Note: This can be used for gravity, but only if all masspoints have the same mass!
+	// => Use setConstantAcceleration instead!
 	void applyExternalForce(Vec3 force);
 	
 	// Do Not Change
@@ -56,8 +57,9 @@ public:
 	int addMassPoint(float mass, Vec3 position, Vec3 velocity, bool isFixed);
 	// Note: if initialLength is negative, we use the current masspoint distance as spring length
 	void addSpring(float stiffness, int masspoint1, int masspoint2, float initialLength);
-	// Apply external force to only one specific masspoint
-	//void applyExternalForce(int masspoint, Vec3 force);
+	// Set an acceleration that is applied to every masspoint in every timestep
+	// This can be used for gravity!
+	void setConstantAcceleration(Vec3 acceleration);
 
 
 private:
@@ -97,15 +99,23 @@ private:
 	};
 	typedef struct spring_t Spring;
 
-	float m_fSimTime;
 	int m_iMaxCountMassPoints;
 	int m_iMaxCountSprings;
 	int m_iCountMassPoints;
 	int m_iCountSprings;
 	MassPoint *m_MassPoints;
 	Spring* m_Springs;
+	Vec3 m_constantAcceleration;
+
+	// Cube simulation
+	float m_fCubeSize;
+	int m_iCubeResolution;
+	int m_mainPoint;
 
 	// Custom Functions
+	void clampMassPointsToBox(Vec3 pMin, Vec3 pMax);
+	void clampTmpMassPointsToBox(Vec3 pMin, Vec3 pMax);
+	void addCube();
 
 };
 #endif

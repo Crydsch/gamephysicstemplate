@@ -1,8 +1,8 @@
 #include "MassSpringSystemSimulator.h"
+#include <set>
 
 MassSpringSystemSimulator::MassSpringSystemSimulator(int maxCountMassPoints, int maxCountSprings)
 {
-	m_fSimTime = 0;
 	m_iMaxCountMassPoints = maxCountMassPoints;
 	m_iMaxCountSprings = maxCountSprings;
 	m_iCountMassPoints = 0;
@@ -12,6 +12,10 @@ MassSpringSystemSimulator::MassSpringSystemSimulator(int maxCountMassPoints, int
 
 	m_iTestCase = 0;
 	m_iIntegrator = EULER;
+
+	m_fCubeSize = 1.0f;
+	m_iCubeResolution = 1;
+	m_constantAcceleration = Vec3(0.0f);
 
 	reset();
 }
@@ -39,7 +43,7 @@ void MassSpringSystemSimulator::reset()
 	m_iCountMassPoints = 0;
 	m_iCountSprings = 0;
 
-
+	m_mainPoint = -1;
 }
 
 const char* MassSpringSystemSimulator::getTestCasesStr()
@@ -120,6 +124,16 @@ void MassSpringSystemSimulator::notifyCaseChanged(int testCase)
 		addSpring(40, mp1, mp2, 1);
 		setIntegrator(MIDPOINT);
 		break;
+	
+	case 3: /* Demo 4*/
+		// elastic cube
+		// center point at (0,0,0)
+		addCube();
+		setDampingFactor(1.2f);
+		setConstantAcceleration(Vec3(0.0f, -0.5f, 0.0f));
+		setIntegrator(MIDPOINT);
+
+		break;
 
 	default:
 		std::cerr << "Unknown TestCase selected: " << testCase << std::endl;
@@ -127,14 +141,88 @@ void MassSpringSystemSimulator::notifyCaseChanged(int testCase)
 	}
 }
 
+UINT64 springID(int mp1, int mp2) {
+	// Note: mass points ids are positive integer
+	return (((UINT64)mp1) << 32) | ((UINT64)mp2);
+}
+
+void MassSpringSystemSimulator::addCube() {
+	// generate cube points
+	int res = (m_iCubeResolution * 2 + 1);
+	float pointDistance = m_fCubeSize / (res - 1);
+	Vec3 minPos = Vec3(-pointDistance * m_iCubeResolution);
+
+	int* points = (int*)calloc(res * res * res, sizeof(int));
+	if (points == nullptr) { std::cerr << "calloc failed!" << std::endl; exit(1); }
+
+	for (int x = 0; x < res; x++) {
+		for (int y = 0; y < res; y++) {
+			for (int z = 0; z < res; z++) {
+				Vec3 pos = Vec3(minPos.x + pointDistance * x, minPos.y + pointDistance * y, minPos.z + pointDistance * z);
+				points[x + res * y + res * res * z] = addMassPoint(1, pos, Vec3(0.0f), false);
+			}
+		}
+	}
+
+	m_mainPoint = points[m_iCubeResolution + res * m_iCubeResolution + res * res * m_iCubeResolution];
+
+	set<UINT64, greater<UINT64>> springs;
+	// generate springs
+	// we add a spring to all neighbours (direct and diagonal)
+
+	// for all mass points
+	for (int x = 0; x < res; x++) {
+		for (int y = 0; y < res; y++) {
+			for (int z = 0; z < res; z++) {
+				int mp1 = points[x + res * y + res * res * z];
+				//std::cerr << "# " << mp1 << ":" << std::endl;
+
+				// for all neighbours
+				for (int dx = -1; dx <= 1; dx++) {
+					for (int dy = -1; dy <= 1; dy++) {
+						for (int dz = -1; dz <= 1; dz++) {
+							
+							// if valid index
+							int nx = x + dx;
+							int ny = y + dy;
+							int nz = z + dz;
+							if (nx >= 0 && nx < res &&
+								ny >= 0 && ny < res &&
+								nz >= 0 && nz < res &&
+								!(nx == x && ny == y && nz == z)) {
+								int mp2 = points[nx + res * ny + res * res * nz];
+								//std::cerr << dx << "\t" << dy << "\t" << dz << std::endl;
+
+								// if no spring yet, add one
+								if (springs.find(springID(mp1, mp2)) == springs.end() &&
+									springs.find(springID(mp2, mp1)) == springs.end()) {
+									springs.emplace(springID(mp1, mp2));
+									addSpring(200.0f, mp1, mp2, -1.0f);
+								}
+
+							}
+
+						}
+					}
+				}
+
+			}
+		}
+	}
+
+	free(points);
+}
+
 void MassSpringSystemSimulator::initUI(DrawingUtilitiesClass* DUC)
 {
 	this->DUC = DUC;
-	// integrator selector
 	TwAddSeparator(DUC->g_pTweakBar, "", "");
+	// integrator
 	TwAddButton(DUC->g_pTweakBar, "Use EULER", [](void* s) { *((int*)s) = EULER; }, &m_iIntegrator, "");
 	TwAddButton(DUC->g_pTweakBar, "Use MIDPOINT", [](void* s) { *((int*)s) = MIDPOINT; }, &m_iIntegrator, "");
+	// damping
 	TwAddVarRW(DUC->g_pTweakBar, "Damping Factor", TW_TYPE_FLOAT, &m_fDamping, "step=0.05 min=0.0");
+
 	switch (m_iTestCase)
 	{
 	case 0: // Demo 1: Nothing rendered
@@ -149,7 +237,9 @@ void MassSpringSystemSimulator::initUI(DrawingUtilitiesClass* DUC)
 
 		break;
 	case 3:
-		//TwAddVarRW(DUC->g_pTweakBar, "Cube Resolution", TW_TYPE_INT32, &m_iCubeResolution, "min=1");
+		// prob, have to be callbacks
+		//TwAddVarRW(DUC->g_pTweakBar, "Cube Size", TW_TYPE_FLOAT, &m_iCubeSize, "min=0.5 step=0.1");
+		//TwAddVarRW(DUC->g_pTweakBar, "Cube Resolution", TW_TYPE_INT32, &m_iCubeResolution, "min=2");
 		break;
 	default:
 		break;
@@ -194,8 +284,45 @@ void MassSpringSystemSimulator::externalForcesCalculations(float timeElapsed)
 	// => Best not to rely on this function being called or not and just do our own internal calculations for external forces!
 }
 
+// clamps all masspoints coordinates to a box around (0,0,0)
+// This effectively acts as a collision with the ground (and the other sides)
+void MassSpringSystemSimulator::clampMassPointsToBox(Vec3 pMin, Vec3 pMax) {
+	for (int i = 0; i < m_iCountMassPoints; i++) {
+		// Note: maximize/minimize are bugged
+		//m_MassPoints[i].position.maximize(pMin);
+		//m_MassPoints[i].position.minimize(pMax);
+		m_MassPoints[i].position.x = max(m_MassPoints[i].position.x, pMin.x);
+		m_MassPoints[i].position.y = max(m_MassPoints[i].position.y, pMin.y);
+		m_MassPoints[i].position.z = max(m_MassPoints[i].position.z, pMin.z);
+		m_MassPoints[i].position.x = min(m_MassPoints[i].position.x, pMax.x);
+		m_MassPoints[i].position.y = min(m_MassPoints[i].position.y, pMax.y);
+		m_MassPoints[i].position.z = min(m_MassPoints[i].position.z, pMax.z);
+	}
+}
+
+void MassSpringSystemSimulator::clampTmpMassPointsToBox(Vec3 pMin, Vec3 pMax) {
+	// Does the same as clampMassPointsToBox jsut for midpoint tmp positions
+	for (int i = 0; i < m_iCountMassPoints; i++) {
+		// Note: maximize/minimize are bugged
+		//m_MassPoints[i].position.maximize(pMin);
+		//m_MassPoints[i].position.minimize(pMax);
+		m_MassPoints[i].position.x = max(m_MassPoints[i].position.x, pMin.x);
+		m_MassPoints[i].position.y = max(m_MassPoints[i].position.y, pMin.y);
+		m_MassPoints[i].position.z = max(m_MassPoints[i].position.z, pMin.z);
+		m_MassPoints[i].position.x = min(m_MassPoints[i].position.x, pMax.x);
+		m_MassPoints[i].position.y = min(m_MassPoints[i].position.y, pMax.y);
+		m_MassPoints[i].position.z = min(m_MassPoints[i].position.z, pMax.z);
+	}
+}
+
 void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 {
+	Point2D mouseDiff;
+	Vec3 user_force;
+	int res = (m_iCubeResolution * 2 + 1);
+	// find a proper scale!
+	float inputScale = 0.5f;
+
 	switch (m_iIntegrator)
 	{
 	case EULER:
@@ -257,13 +384,27 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 			m_MassPoints[i].force += -m_fDamping * m_MassPoints[i].velocity;
 		}
 		//  user interaction
-		//  gravity (add directly to acceleration!)
+		mouseDiff.x = m_trackmouse.x - m_oldtrackmouse.x;
+		mouseDiff.y = m_trackmouse.y - m_oldtrackmouse.y;
+		if (mouseDiff.x != 0 || mouseDiff.y != 0)
+		{
+			Mat4 worldViewInv = Mat4(DUC->g_camera.GetWorldMatrix() * DUC->g_camera.GetViewMatrix());
+			worldViewInv = worldViewInv.inverse();
+			Vec3 inputView = Vec3((float)mouseDiff.x, (float)-mouseDiff.y, 0);
+			user_force = worldViewInv.transformVectorNormal(inputView);
+			user_force = user_force * inputScale;
+		}
+		if (m_mainPoint != -1) {
+			m_MassPoints[m_mainPoint].force += user_force;
+		}
 
 		/* calc acceleration with NEW forces */
 		for (int i = 0; i < m_iCountMassPoints; i++) {
 			if (!m_MassPoints[i].isFixed) {
 				m_MassPoints[i].acceleration = m_MassPoints[i].force;
 				m_MassPoints[i].acceleration.safeDivide(m_MassPoints[i].mass);
+				// add constant acceleration (gravity)
+				m_MassPoints[i].acceleration += m_constantAcceleration;
 			}
 		}
 
@@ -273,8 +414,8 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 				m_MassPoints[i].position += timeStep * m_MassPoints[i].velocity;
 			}
 		}
-		// TODO: handle collisions
-		// TODO: clamp to ground plane
+		// handle collisions
+		clampMassPointsToBox(Vec3(-2, -0.95, -2), Vec3(2, 4, 2));
 
 		/* update velocity with NEW acceleration */
 		for (int i = 0; i < m_iCountMassPoints; i++) {
@@ -284,6 +425,7 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 		}
 
 		break;
+
 	case MIDPOINT:
 
 		// DO MIDPOINT INTEGRATION
@@ -295,6 +437,8 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 				m_MassPoints[i].tmp_position = m_MassPoints[i].position + (timeStep/2.0f) * m_MassPoints[i].velocity;
 			}
 		}
+		// handle collisions
+		clampTmpMassPointsToBox(Vec3(-2, -0.95, -2), Vec3(2, 3, 2));
 
 		/* calc forces at(t + h) with OLD position */
 		// reset forces
@@ -338,13 +482,27 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 			m_MassPoints[i].force += -m_fDamping * m_MassPoints[i].velocity;
 		}
 		//  user interaction
-		//  gravity (add directly to acceleration!)
+		mouseDiff.x = m_trackmouse.x - m_oldtrackmouse.x;
+		mouseDiff.y = m_trackmouse.y - m_oldtrackmouse.y;
+		if (mouseDiff.x != 0 || mouseDiff.y != 0)
+		{
+			Mat4 worldViewInv = Mat4(DUC->g_camera.GetWorldMatrix() * DUC->g_camera.GetViewMatrix());
+			worldViewInv = worldViewInv.inverse();
+			Vec3 inputView = Vec3((float)mouseDiff.x, (float)-mouseDiff.y, 0);
+			user_force = worldViewInv.transformVectorNormal(inputView);
+			user_force = user_force * inputScale;
+		}
+		if (m_mainPoint != -1) {
+			m_MassPoints[m_mainPoint].force += user_force;
+		}
 		
 		/* calc acceleration at(t + h) with forces at(t + h) */
 		for (int i = 0; i < m_iCountMassPoints; i++) {
 			if (!m_MassPoints[i].isFixed) {
 				m_MassPoints[i].acceleration = m_MassPoints[i].force;
 				m_MassPoints[i].acceleration.safeDivide(m_MassPoints[i].mass);
+				// add constant acceleration (gravity)
+				m_MassPoints[i].acceleration += m_constantAcceleration;
 			}
 		}
 
@@ -363,6 +521,8 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 				m_MassPoints[i].position += timeStep * m_MassPoints[i].tmp_velocity;
 			}
 		}
+		// handle collisions
+		clampMassPointsToBox(Vec3(-2, -0.95, -2), Vec3(2, 3, 2));
 
 		/* calc forces at(t + h / 2) with tmp_position */
 		// reset forces
@@ -406,15 +566,20 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 			m_MassPoints[i].force += -m_fDamping * m_MassPoints[i].velocity;
 		}
 		//  user interaction
-		//  gravity (add directly to acceleration!)
+		if (m_mainPoint != -1) {
+			m_MassPoints[m_mainPoint].force += user_force;
+		}
 		
 		/* calc acceleration at(t + h / 2) with forces at(t + h / 2) */
 		for (int i = 0; i < m_iCountMassPoints; i++) {
 			if (!m_MassPoints[i].isFixed) {
 				m_MassPoints[i].acceleration = m_MassPoints[i].force;
 				m_MassPoints[i].acceleration.safeDivide(m_MassPoints[i].mass);
+				// add constant acceleration (gravity)
+				m_MassPoints[i].acceleration += m_constantAcceleration;
 			}
 		}
+
 
 		/* update velocity with acceleration at(t + h / 2) */
 		//  v(t+h) = v(0) + h * a(t+h/2)
@@ -438,13 +603,6 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 		m_iIntegrator = NO_INTEGRATOR;
 		break;
 	}
-	
-	if (m_iTestCase == 0 && m_fSimTime <= 0.15f) {
-		// timestep of 0.1f should output only once aka the first iteration
-		
-	}
-
-	m_fSimTime += timeStep;
 }
 
 void MassSpringSystemSimulator::onClick(int x, int y)
@@ -540,6 +698,10 @@ void MassSpringSystemSimulator::addSpring(float stiffness, int masspoint1, int m
 		std::cerr << "Invalid masspoint2! masspoint2 = " << masspoint2 << std::endl;
 		exit(1);
 	}
+	if (masspoint1 == masspoint2) {
+		std::cerr << "It is invalid to add spring to the same masspoint!" << std::endl;
+		exit(1);
+	}
 	if (m_MassPoints[masspoint1].isFixed && m_MassPoints[masspoint2].isFixed) {
 		std::cerr << "WARNING: You are trying to add a spring between two fix points! No spring added." << std::endl;
 		return;
@@ -594,4 +756,8 @@ void MassSpringSystemSimulator::applyExternalForce(Vec3 force)
 	// Note: A real force would be mass dependent,
 	// => You should not use this function. 
 	m_externalForce = force;
+}
+
+void MassSpringSystemSimulator::setConstantAcceleration(Vec3 acceleration) {
+	m_constantAcceleration = acceleration;
 }
