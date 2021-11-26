@@ -3,8 +3,12 @@
 
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 
+// RigidBodySystemSimulator accesses this in the simulation runner as 'extern'
+// so we have to define it here as well, to be able to compile
+int g_iTestCase;
+
 namespace SimulatorTester
-{		
+{
 	TEST_CLASS(PublicRigidBodiesTests)
 	{
 	public: 

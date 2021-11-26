@@ -1,3 +1,6 @@
+#ifdef MASS_SPRING_SYSTEM
+// The SimulationsTester solution cannot link these tests in exercise 2, since there is no MassSpringSystemSimulator.cpp
+
 #include "CppUnitTest.h"
 #include "MassSpringSystemSimulator.h"
 
@@ -122,3 +125,4 @@ namespace SimulatorTester
 
 	};
 }
+#endif // MASS_SPRING_SYSTEM

@@ -8,8 +8,9 @@
 
 class RigidBodySystemSimulator:public Simulator{
 public:
-	// Construtors
+	// 
 	RigidBodySystemSimulator();
+	~RigidBodySystemSimulator();
 	
 	// Functions
 	const char * getTestCasesStr();
