@@ -50,6 +50,7 @@ void RigidBodySystemSimulator::notifyCaseChanged(int testCase)
 	m_iTestCase = testCase;
 	
 	RigidBodySystemSimulator* rbss;
+	Vec3 position, linear_velocity, angular_velocity, posWorld1, posWorld2, posRel1, posRel2, velWorld1, velWorld2;
 	switch (m_iTestCase)
 	{
 	case 0: /* Demo 1 */
@@ -58,16 +59,26 @@ void RigidBodySystemSimulator::notifyCaseChanged(int testCase)
 
 		rbss = new RigidBodySystemSimulator();
 		rbss->addRigidBody(Vec3(0.0f, 0.0f, 0.0f), Vec3(1.0f, 0.6f, 0.5f), 2.0);
-		rbss->setOrientationOf(1, Quat(Vec3(0.0f, 0.0f, 1.0f), ((float)(M_PI)) * 0.5f));
-		rbss->applyForceOnBody(1, Vec3(0.3f, 0.5f, 0.25f), Vec3(1.0f, 1.0f, 0.0f));
-
+		rbss->setOrientationOf(0, Quat(Vec3(0.0f, 0.0f, 1.0f), (float)(M_PI) * 0.5f));
+		rbss->applyForceOnBody(0, Vec3(0.3f, 0.5f, 0.25f), Vec3(1.0f, 1.0f, 0.0f));
 		rbss->simulateTimestep(2.0f);
 
-		/*std::cout << "\nSimulation State after one step (h=0.1f, EULER)\n" <<
-			"  P[" << mp1 << "].position = " << msss->getPositionOfMassPoint(mp1).toString() << "\n" <<
-			"  P[" << mp1 << "].velocity = " << msss->getVelocityOfMassPoint(mp1).toString() << "\n" <<
-			"  P[" << mp2 << "].position = " << msss->getPositionOfMassPoint(mp2).toString() << "\n" <<
-			"  P[" << mp2 << "].velocity = " << msss->getVelocityOfMassPoint(mp2).toString() << std::endl;*/
+		position = rbss->getPositionOfRigidBody(0);
+		linear_velocity = rbss->getLinearVelocityOfRigidBody(0);
+		angular_velocity = rbss->getAngularVelocityOfRigidBody(0);
+
+		posWorld1 = Vec3(0.3f, 0.5f, 0.25f);
+		posWorld2 = Vec3(-0.3f, -0.5f, -0.25f);
+		posRel1 = posWorld1 - rbss->getPositionOfRigidBody(0);
+		posRel2 = posWorld2 - rbss->getPositionOfRigidBody(0);
+		velWorld1 = linear_velocity + cross(angular_velocity, posRel1);
+		velWorld2 = linear_velocity + cross(angular_velocity, posRel2);
+
+		std::cout << "\nSimulation State after one step (h=2.0f)\n" <<
+			"  Body[0].linear_velocity = " << linear_velocity.toString() << "\n" <<
+			"  Body[0].angular_velocity = " << angular_velocity.toString() << "\n" <<
+			"  Vec3(0.3f, 0.5f, 0.25f).velocity = " << velWorld1.toString() << "\n" <<
+			"  Vec3(-0.3f, -0.5f, -0.25f).velocity = " << velWorld2.toString() << std::endl;
 		delete rbss;
 
 		// Demo 1 is a one shot => once done we switch to another testcase
@@ -161,105 +172,58 @@ void RigidBodySystemSimulator::externalForcesCalculations(float timeElapsed)
 
 void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 {
-	Point2D mouseDiff;
-	Vec3 user_force;
+	//Point2D mouseDiff;
+	//Vec3 user_force;
 	// find a proper scale!
-	float inputScale = 0.5f;
+	//float inputScale = 0.5f;
 
-	// Note: We only use explicit EULER for linear velocity
-	// ! angeluar velocity is tricky !
-	// => integrate angular momentum and not the angular velocity
+	// !! ONLY ONE LOOP !! =D
+	for (int i = 0; i < m_iCountBodies; i++) {
+		// external force/torque is already accumulated
 
-	// compute torque
-	// update angular momentum (with euler)
-	// get inverse inertia tensor
-	// update angular velocity (with angular momentum)
+		/* update position */
+		m_Bodies[i].position += timeStep * m_Bodies[i].linear_velocity;
 
-	// how to update quaternion rotation:
-	//  r' = r + h/2 * vec(0, angular_vel) * r
+		/* update linear_velocity */
+		m_Bodies[i].linear_velocity += timeStep * m_Bodies[i].force / m_Bodies[i].mass;
+		// clear forces
+		m_Bodies[i].force = Vec3(0.0f);
 
 
-		///* calc forces with OLD position */
-		//// reset forces
-		//for (int i = 0; i < m_iCountMassPoints; i++) {
-		//	m_MassPoints[i].force = Vec3(0, 0, 0);
-		//}
+		/* update angular_momentum */
+		m_Bodies[i].angular_momentum += timeStep * m_Bodies[i].torque;
+		// reset torque
+		m_Bodies[i].torque = Vec3(0.0f);
 
-		//// calc internal forces
-		////  for each spring
-		//for (int i = 0; i < m_iCountSprings; i++) {
-		//	Spring& s = m_Springs[i];
-		//	MassPoint& mp1 = m_MassPoints[s.masspoint1];
-		//	MassPoint& mp2 = m_MassPoints[s.masspoint2];
+		/* calc CURRENT inverse inertia tensor */
+		//  using the old orientation
+		Mat4 i0, rot, rotT, tensor;
+		// construct I0^-1 matrix
+		i0.initScaling(m_Bodies[i].iiit.x, m_Bodies[i].iiit.y, m_Bodies[i].iiit.z);
+		// get rotation matrix
+		rotT = rot = m_Bodies[i].orientation.getRotMat();
+		// transpose rotation matrix
+		rotT.transpose();
+		// calc inertia tensor
+		tensor = rotT * i0 * rot;
 
-		//	if (mp1.isFixed && mp2.isFixed) {
-		//		// do not apply any force on fixed points!
-		//		continue;
-		//	}
+		/* update orientation */
+		//  using old angular_velocity
+		// const Real s1 = 0;
+		const Vec3 v1 = m_Bodies[i].angular_velocity;
+		const Real s2 = m_Bodies[i].orientation.w;
+		const Vec3 v2 = Vec3(m_Bodies[i].orientation.x, m_Bodies[i].orientation.y, m_Bodies[i].orientation.z);
 
-		//	// calc force aka hookes law (on mp1)
-		//	float distance = norm(mp1.position - mp2.position);
-		//	Vec3 direction = getNormalized(mp1.position - mp2.position);
-		//	Vec3 force = -s.stiffness * (distance - s.length) * direction;
+		const Real s3 = -1.0f * (v1.x * v2.x + v1.y * v2.y + v1.z * v2.z);
+		const Vec3 v3 = s2 * v1 + cross(v1, v2);
+		
+		m_Bodies[i].orientation += Quat(s3, v3.x, v3.y, v3.z) * (0.5 * timeStep);
+		m_Bodies[i].orientation.unit(); // renormalize
 
-		//	// add forces to mass points current forces
-		//	if (mp1.isFixed && !mp2.isFixed) {
-		//		mp2.force += -2 * force;
-		//	}
-		//	else if (!mp1.isFixed && mp2.isFixed) {
-		//		mp2.force += 2 * force;
-		//	}
-		//	else { // both are not fixed
-		//		mp1.force = mp1.force + force;
-		//		mp2.force = mp2.force - force;
-		//	}
-		//}
-
-		//// calc external forces
-		////  damping  F_damp(t)=-m_fDamping*v(t)
-		//for (int i = 0; i < m_iCountMassPoints; i++) {
-		//	m_MassPoints[i].force += -m_fDamping * m_MassPoints[i].velocity;
-		//}
-		////  user interaction
-		//mouseDiff.x = m_trackmouse.x - m_oldtrackmouse.x;
-		//mouseDiff.y = m_trackmouse.y - m_oldtrackmouse.y;
-		//if (mouseDiff.x != 0 || mouseDiff.y != 0)
-		//{
-		//	Mat4 worldViewInv = Mat4(DUC->g_camera.GetWorldMatrix() * DUC->g_camera.GetViewMatrix());
-		//	worldViewInv = worldViewInv.inverse();
-		//	Vec3 inputView = Vec3((float)mouseDiff.x, (float)-mouseDiff.y, 0);
-		//	user_force = worldViewInv.transformVectorNormal(inputView);
-		//	user_force = user_force * inputScale;
-		//}
-		//if (m_mainPoint != -1) {
-		//	m_MassPoints[m_mainPoint].force += user_force;
-		//}
-
-		///* calc acceleration with NEW forces */
-		//for (int i = 0; i < m_iCountMassPoints; i++) {
-		//	if (!m_MassPoints[i].isFixed) {
-		//		m_MassPoints[i].acceleration = m_MassPoints[i].force;
-		//		m_MassPoints[i].acceleration.safeDivide(m_MassPoints[i].mass);
-		//		// add constant acceleration (gravity)
-		//		m_MassPoints[i].acceleration += m_constantAcceleration;
-		//	}
-		//}
-
-		///* update position with OLD velocity */
-		//for (int i = 0; i < m_iCountMassPoints; i++) {
-		//	if (!m_MassPoints[i].isFixed) {
-		//		m_MassPoints[i].position += timeStep * m_MassPoints[i].velocity;
-		//	}
-		//}
-		//// handle collisions
-		//clampMassPointsToBox(Vec3(-2, -0.95, -2), Vec3(2, 4, 2));
-
-		///* update velocity with NEW acceleration */
-		//for (int i = 0; i < m_iCountMassPoints; i++) {
-		//	if (!m_MassPoints[i].isFixed) {
-		//		m_MassPoints[i].velocity += timeStep * m_MassPoints[i].acceleration;
-		//	}
-		//}
+		/* update angular_velocity */
+		//  using angular momentum & inertia tensor
+		m_Bodies[i].angular_velocity = tensor * m_Bodies[i].angular_momentum;
+	}
 
 }
 
@@ -349,7 +313,7 @@ void RigidBodySystemSimulator::setOrientationOf(int i, Quat orientation) {
 		exit(1);
 	}
 
-	m_Bodies[i].orientation = orientation;
+	m_Bodies[i].orientation = orientation.unit();
 }
 
 void RigidBodySystemSimulator::setVelocityOf(int i, Vec3 velocity) {
