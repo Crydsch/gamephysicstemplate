@@ -1,14 +1,11 @@
 #include "RigidBodySystemSimulator.h"
+#include "collisionDetect.h"
 
-//RigidBodySystemSimulator::RigidBodySystemSimulator(int maxCountMassPoints, int maxCountSprings)
-RigidBodySystemSimulator::RigidBodySystemSimulator()
+RigidBodySystemSimulator::RigidBodySystemSimulator(int maxCountBodies)
 {
-	//m_iMaxCountMassPoints = maxCountMassPoints;
-	//m_iMaxCountSprings = maxCountSprings;
-	//m_iCountMassPoints = 0;
-	//m_iCountSprings = 0;
-	//m_MassPoints = (MassPoint*)calloc(m_iMaxCountMassPoints, sizeof(MassPoint)); // default 10000*(4+3*4+3*4+1)=283KB
-	//m_Springs = (Spring*)calloc(m_iMaxCountSprings, sizeof(Spring)); // default 10000*(4+4+4+4)=156KB
+	m_iMaxCountBodies = maxCountBodies;
+	m_iCountBodies = 0;
+	m_Bodies = (Body*)calloc(m_iMaxCountBodies, sizeof(Body)); // default 1000*(7*3*4+4*4+4)=102KB
 
 	m_iTestCase = 0;
 
@@ -17,23 +14,20 @@ RigidBodySystemSimulator::RigidBodySystemSimulator()
 
 RigidBodySystemSimulator::~RigidBodySystemSimulator()
 {
-	/*free(m_MassPoints);
-	free(m_Springs);*/
+	free(m_Bodies);
 }
 
 void RigidBodySystemSimulator::reset()
 {
 	//std::cerr << "reset()" << std::endl;
 
-	m_externalForce = Vec3(0.0f);
 	m_mouse = { 0, 0 };
 	m_trackmouse = { 0, 0 };
 	m_oldtrackmouse = { 0, 0 };
 
-	// Note: No need to actually reset every mass point/spring
+	// Note: No need to actually reset every body
 	//  Only the ones in [0,count[ are valid anyway
-	/*m_iCountMassPoints = 0;
-	m_iCountSprings = 0;*/
+	m_iCountBodies = 0;
 }
 
 const char* RigidBodySystemSimulator::getTestCasesStr()
@@ -59,11 +53,16 @@ void RigidBodySystemSimulator::notifyCaseChanged(int testCase)
 	switch (m_iTestCase)
 	{
 	case 0: /* Demo 1 */
-		// ??? TODO
+		// Single body pushed by some external force
 		// We construct our own Simulator similar to the Visual Studio Testcases
 
 		rbss = new RigidBodySystemSimulator();
-		// TODO
+		rbss->addRigidBody(Vec3(0.0f, 0.0f, 0.0f), Vec3(1.0f, 0.6f, 0.5f), 2.0);
+		rbss->setOrientationOf(1, Quat(Vec3(0.0f, 0.0f, 1.0f), ((float)(M_PI)) * 0.5f));
+		rbss->applyForceOnBody(1, Vec3(0.3f, 0.5f, 0.25f), Vec3(1.0f, 1.0f, 0.0f));
+
+		rbss->simulateTimestep(2.0f);
+
 		/*std::cout << "\nSimulation State after one step (h=0.1f, EULER)\n" <<
 			"  P[" << mp1 << "].position = " << msss->getPositionOfMassPoint(mp1).toString() << "\n" <<
 			"  P[" << mp1 << "].velocity = " << msss->getVelocityOfMassPoint(mp1).toString() << "\n" <<
@@ -138,10 +137,18 @@ void RigidBodySystemSimulator::drawFrame(ID3D11DeviceContext* pd3dImmediateConte
 	//const Vec3 red = Vec3(0xBB, 0x48, 0x44) / 255.0f; // ##BB4844
 	//const Vec3 blue = Vec3(0x44, 0xB7, 0xBB) / 255.0f; // ##44B7BB
 
-	DUC->setUpLighting(Vec3(0.0f), 0.4 * turquoise, 100, 0.6 * darkturquoise);
-	//BodyA.Obj2WorldMatrix = BodyA.scaleMat * BodyA.rotMat * BodyA.translatMat;
-	//DUC->drawRigidBody(BodyA.Obj2WorldMatrix);
-
+	// Note: Boxes are drawn as unit-cubes around (0,0,0)
+	//       our world matrix has to rotate, scale and translate accordingly.
+	for (int i = 0; i < m_iCountBodies; i++) {
+		Body b = m_Bodies[i];
+		DUC->setUpLighting(Vec3(0.0f), 0.4 * turquoise, 100, 0.6 * darkturquoise);
+		Mat4 scale, rot, transl, obj2world;
+		scale.initScaling(b.size.x, b.size.y, b.size.z);
+		rot = b.orientation.getRotMat();
+		transl.initTranslation(b.position.x, b.position.y, b.position.z);
+		obj2world = scale * rot * transl;
+		DUC->drawRigidBody(obj2world);
+	}
 }
 
 void RigidBodySystemSimulator::externalForcesCalculations(float timeElapsed)
@@ -159,8 +166,19 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 	// find a proper scale!
 	float inputScale = 0.5f;
 
-	// Note: We only use explicit EULER for the rigid body simulation
-	
+	// Note: We only use explicit EULER for linear velocity
+	// ! angeluar velocity is tricky !
+	// => integrate angular momentum and not the angular velocity
+
+	// compute torque
+	// update angular momentum (with euler)
+	// get inverse inertia tensor
+	// update angular velocity (with angular momentum)
+
+	// how to update quaternion rotation:
+	//  r' = r + h/2 * vec(0, angular_vel) * r
+
+
 		///* calc forces with OLD position */
 		//// reset forces
 		//for (int i = 0; i < m_iCountMassPoints; i++) {
@@ -262,42 +280,118 @@ void RigidBodySystemSimulator::onMouse(int x, int y)
 	m_trackmouse = { x, y };
 }
 
-int RigidBodySystemSimulator::getNumberOfRigidBodies() {
-	// TODO
-	return 0;
-}
-
-Vec3 RigidBodySystemSimulator::getPositionOfRigidBody(int i) {
-	// TODO
-	return Vec3(0.0f);
-}
-
-Vec3 RigidBodySystemSimulator::getLinearVelocityOfRigidBody(int i) {
-	// TODO
-	return Vec3(0.0f);
-}
-
-Vec3 RigidBodySystemSimulator::getAngularVelocityOfRigidBody(int i) {
-	// TODO
-	return Vec3(0.0f);
-}
-
 void RigidBodySystemSimulator::applyForceOnBody(int i, Vec3 loc, Vec3 force) {
-	// TODO
+	// Sanity checks
+	if (i < 0 || i >= m_iCountBodies) {
+		std::cerr << "Invalid index! There are only " << m_iCountBodies << " bodies." << std::endl;
+		exit(1);
+	}
 
+	// accumulate linear force
+	m_Bodies[i].force += force;
+
+	// accumulate torque
+	const Vec3 rel_pos = loc - m_Bodies[i].position;
+	m_Bodies[i].torque += cross(rel_pos, force);
 }
 
 void RigidBodySystemSimulator::addRigidBody(Vec3 position, Vec3 size, int mass) {
-	// TODO
+	// a rigid body has to be in a valid state after being added
+	
+	// Sanity checks
+	if (m_iCountBodies >= m_iMaxCountBodies) {
+		std::cerr << "Too many mass points! (MAX = " << m_iMaxCountBodies << ")" << std::endl;
+		exit(1);
+	}
+	if (mass == 0.0f) {
+		std::cerr << "Invalid mass! mass == 0" << std::endl;
+		exit(1);
+	}
+	if (mass <= 0.0f) {
+		std::cerr << "Negative mass! mass < 0" << std::endl;
+		exit(1);
+	}
+	if (size.x <= 0.0f || size.y <= 0.0f || size.z <= 0.0f) {
+		std::cerr << "Invalid size! size <= 0" << std::endl;
+		exit(1);
+	}
 
+	m_Bodies[m_iCountBodies].size = size;
+
+	m_Bodies[m_iCountBodies].position = position;
+	m_Bodies[m_iCountBodies].linear_velocity = Vec3(0.0f);
+	m_Bodies[m_iCountBodies].force = Vec3(0.0f);
+	m_Bodies[m_iCountBodies].mass = mass;
+
+	m_Bodies[m_iCountBodies].orientation = Quat();
+	m_Bodies[m_iCountBodies].angular_velocity = Vec3(0.0f);
+	m_Bodies[m_iCountBodies].angular_momentum = Vec3(0.0f);
+	m_Bodies[m_iCountBodies].torque = Vec3(0.0f);
+	// Note: We use the analytical moment of inertia
+	//       We handle x=width y=height z=depth
+	// Ref.: https://en.wikipedia.org/wiki/List_of_moments_of_inertia
+	m_Bodies[m_iCountBodies].iiit = Vec3(mass / 12.0f);
+	m_Bodies[m_iCountBodies].iiit.x *= (size.y * size.y + size.z * size.z);
+	m_Bodies[m_iCountBodies].iiit.y *= (size.x * size.x + size.z * size.z);
+	m_Bodies[m_iCountBodies].iiit.z *= (size.x * size.x + size.y * size.y);
+	// invert
+	m_Bodies[m_iCountBodies].iiit.x = 1 / m_Bodies[m_iCountBodies].iiit.x;
+	m_Bodies[m_iCountBodies].iiit.y = 1 / m_Bodies[m_iCountBodies].iiit.y;
+	m_Bodies[m_iCountBodies].iiit.z = 1 / m_Bodies[m_iCountBodies].iiit.z;
+
+	m_iCountBodies++;
 }
 
 void RigidBodySystemSimulator::setOrientationOf(int i, Quat orientation) {
-	// TODO
+	// Sanity checks
+	if (i < 0 || i >= m_iCountBodies) {
+		std::cerr << "Invalid index! There are only " << m_iCountBodies << " bodies." << std::endl;
+		exit(1);
+	}
 
+	m_Bodies[i].orientation = orientation;
 }
 
 void RigidBodySystemSimulator::setVelocityOf(int i, Vec3 velocity) {
-	// TODO
+	// Sanity checks
+	if (i < 0 || i >= m_iCountBodies) {
+		std::cerr << "Invalid index! There are only " << m_iCountBodies << " bodies." << std::endl;
+		exit(1);
+	}
 
+	m_Bodies[i].linear_velocity = velocity;
+}
+
+int RigidBodySystemSimulator::getNumberOfRigidBodies() {
+	return m_iCountBodies;
+}
+
+Vec3 RigidBodySystemSimulator::getPositionOfRigidBody(int i) {
+	// Sanity checks
+	if (i < 0 || i >= m_iCountBodies) {
+		std::cerr << "Invalid index! There are only " << m_iCountBodies << " bodies." << std::endl;
+		exit(1);
+	}
+
+	return m_Bodies[i].position;
+}
+
+Vec3 RigidBodySystemSimulator::getLinearVelocityOfRigidBody(int i) {
+	// Sanity checks
+	if (i < 0 || i >= m_iCountBodies) {
+		std::cerr << "Invalid index! There are only " << m_iCountBodies << " bodies." << std::endl;
+		exit(1);
+	}
+
+	return m_Bodies[i].linear_velocity;
+}
+
+Vec3 RigidBodySystemSimulator::getAngularVelocityOfRigidBody(int i) {
+	// Sanity checks
+	if (i < 0 || i >= m_iCountBodies) {
+		std::cerr << "Invalid index! There are only " << m_iCountBodies << " bodies." << std::endl;
+		exit(1);
+	}
+
+	return m_Bodies[i].angular_velocity;
 }
