@@ -219,12 +219,13 @@ Mat4 constructIIIT(Vec3 iiit, Quat orientation) {
 	Mat4 i0, rot, rotT;
 	// construct I0^-1 matrix
 	i0.initScaling(iiit.x, iiit.y, iiit.z);
+	i0.value[3][3] = 0.0;
 	// get rotation matrix
 	rotT = rot = orientation.getRotMat();
 	// transpose rotation matrix
 	rotT.transpose();
 	// calc inertia tensor
-	return rotT * i0 * rot;
+	return rotT * i0 * rot; // TODO is this the right way round?
 }
 
 void RigidBodySystemSimulator::simulateTimestep(float timeStep)
@@ -319,17 +320,8 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 		m_Bodies[i].torque = Vec3(0.0f);
 
 		/* calc CURRENT inverse inertia tensor */
+		//  using the old orientation
 		Mat4 tensor = constructIIIT(m_Bodies[i].iiit, m_Bodies[i].orientation);
-		////  using the old orientation
-		//Mat4 i0, rot, rotT, tensor;
-		//// construct I0^-1 matrix
-		//i0.initScaling(m_Bodies[i].iiit.x, m_Bodies[i].iiit.y, m_Bodies[i].iiit.z);
-		//// get rotation matrix
-		//rotT = rot = m_Bodies[i].orientation.getRotMat();
-		//// transpose rotation matrix
-		//rotT.transpose();
-		//// calc inertia tensor
-		//tensor = rotT * i0 * rot;
 
 		/* update orientation */
 		//  using old angular_velocity
@@ -342,7 +334,7 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 		const Vec3 v3 = s2 * v1 + cross(v1, v2);
 		
 		m_Bodies[i].orientation += Quat(v3.x, v3.y, v3.z, s3) * (0.5 * timeStep);
-		m_Bodies[i].orientation.unit(); // renormalize
+		m_Bodies[i].orientation = m_Bodies[i].orientation.unit(); // renormalize
 
 		/* update angular_velocity */
 		//  using angular momentum & inertia tensor
@@ -431,7 +423,7 @@ void RigidBodySystemSimulator::addRigidBody(Vec3 position, Vec3 size, float mass
 		m_Bodies[m_iCountBodies].iiit.z = 1 / m_Bodies[m_iCountBodies].iiit.z;
 	}
 	
-	m_Bodies[m_iCountBodies].orientation = Quat(0.0f, 0.0f, 0.0f);
+	m_Bodies[m_iCountBodies].orientation = Quat(0.0f, 0.0f, 0.0f).unit();
 	m_Bodies[m_iCountBodies].angular_velocity = Vec3(0.0f);
 	m_Bodies[m_iCountBodies].angular_momentum = Vec3(0.0f);
 	m_Bodies[m_iCountBodies].torque = Vec3(0.0f);
