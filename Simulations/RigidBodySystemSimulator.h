@@ -71,6 +71,13 @@ private:
 
 	int m_iCountBodiesTarget;
 	Vec3 m_constantAcceleration; // can be used for gravity (only applied to center of mass aka has no influence on rotation)
+	int m_iSelectedBody;
+
+	void spawnBody();
+	bool m_newBodyPrepared;
+	Vec3 m_newBody_size;
+	Quat m_newBody_orientation;
+	float m_newBody_mass;
 
 	};
 #endif

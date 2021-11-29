@@ -33,6 +33,8 @@ void RigidBodySystemSimulator::reset()
 	m_fBounciness = 1.0f;
 
 	m_constantAcceleration = Vec3(0.0f);
+	m_newBodyPrepared = false;
+	m_iSelectedBody = -1;
 }
 
 const char* RigidBodySystemSimulator::getTestCasesStr()
@@ -107,7 +109,7 @@ void RigidBodySystemSimulator::notifyCaseChanged(int testCase)
 		// Run and render the simulation
 
 		// first box (0.5,0,0.5) rather flat, static
-		addRigidBody(Vec3(0.5f, 0.0f, 0.5f), Vec3(1.0f, 0.3f, 1.0f), 2.0f, true);
+		addRigidBody(Vec3(0.5f, 0.0f, 0.5f), Vec3(1.0f, 0.3f, 1.0f), 2.0f);
 
 		// first box (0,1,0) small, rotated to face a corner down, pushed downwards
 		addRigidBody(Vec3(0.0f, 1.0f, 0.0f), Vec3(0.3f, 0.3f, 0.3f), 2.0f);
@@ -121,13 +123,16 @@ void RigidBodySystemSimulator::notifyCaseChanged(int testCase)
 		// Run and render the simulation
 
 		// add floor
-		addRigidBody(Vec3(0.0f, -1.0f, 0.0f), Vec3(10.0f, 0.1f, 10.0f), 1000.0f);
+		addRigidBody(Vec3(0.0f, -1.0f, 0.0f), Vec3(10.0f, 1.1f, 10.0f), 1337.0f, true);
 
 		// enable gravity
-		m_constantAcceleration = Vec3(0.0f, -1.0f, 0.0f);
+		m_constantAcceleration = Vec3(0.0f, -0.05f, 0.0f);
+
+		// take some energy out of the system
+		m_fBounciness = 0.7f;
 
 		// let the bodies hit the floooooooor!
-		m_iCountBodiesTarget = 20;
+		m_iCountBodiesTarget = 2;
 
 		break;
 
@@ -148,13 +153,13 @@ void RigidBodySystemSimulator::initUI(DrawingUtilitiesClass* DUC)
 	case 0: // Demo 1: Nothing rendered
 		break;
 	case 1: // Demo 2
-		break;
 	case 2: // Demo 3
+		TwAddVarRW(DUC->g_pTweakBar, "Selected Body", TW_TYPE_INT32, &m_iSelectedBody, "step=1 min=0");
 		break;
 	case 3: // Demo 4
 		TwAddVarRO(DUC->g_pTweakBar, "Bodies Count", TW_TYPE_INT32, &m_iCountBodies, "");
 		TwAddVarRW(DUC->g_pTweakBar, "Bodies Count Target", TW_TYPE_INT32, &m_iCountBodiesTarget, "step=1 min=1");
-
+		TwAddVarRW(DUC->g_pTweakBar, "Selected Body", TW_TYPE_INT32, &m_iSelectedBody, "step=1 min=1");
 		break;
 	default:
 		break;
@@ -171,7 +176,8 @@ void RigidBodySystemSimulator::drawFrame(ID3D11DeviceContext* pd3dImmediateConte
 	const Vec3 lilac = Vec3(0x7D, 0x4F, 0xB0) / 255.0f; // #7D4FB0
 	const Vec3 lightlilac = Vec3(0x90, 0x68, 0xBB) / 255.0f; // #9068BB
 	//const Vec3 green = Vec3(0x7B, 0xBB, 0x44) / 255.0f; // #7BBB44
-	//const Vec3 red = Vec3(0xBB, 0x48, 0x44) / 255.0f; // ##BB4844
+	const Vec3 red = Vec3(0xBB, 0x48, 0x44) / 255.0f; // ##BB4844
+	const Vec3 lightred = Vec3(0xBD, 0x63, 0x60) / 255.0f; // ##BD6360
 	//const Vec3 blue = Vec3(0x44, 0xB7, 0xBB) / 255.0f; // ##44B7BB
 
 	int i = 0;
@@ -201,7 +207,12 @@ void RigidBodySystemSimulator::drawFrame(ID3D11DeviceContext* pd3dImmediateConte
 		transl.initTranslation(b.position.x, b.position.y, b.position.z);
 		obj2world = scale * rot * transl;
 		
-		DUC->setUpLighting(Vec3(0.0f), 0.4 * turquoise, 100, 0.6 * darkturquoise);
+		if (i == m_iSelectedBody) {
+			DUC->setUpLighting(Vec3(0.0f), 0.4 * lightred, 100, 0.6 * red);
+		}
+		else {
+			DUC->setUpLighting(Vec3(0.0f), 0.4 * turquoise, 100, 0.6 * darkturquoise);
+		}
 		DUC->drawRigidBody(obj2world);
 	}
 }
@@ -229,90 +240,87 @@ Mat4 constructIIIT(Vec3 iiit, Quat orientation) {
 	return rot * i0 * rotT; // TODO is this the right way round?
 }
 
-void RigidBodySystemSimulator::simulateTimestep(float timeStep)
-{
-	//Point2D mouseDiff;
-	//Vec3 user_force;
-	//// find a proper scale!
-	//float inputScale = 0.5f;
+Mat4 constructObj2Wold(Vec3 position, Vec3 size, Quat orientation) {
+	Mat4 scale, rot, transl, b1_obj2world, b2_obj2world;
+	scale.initScaling(size.x, size.y, size.z);
+	rot = orientation.getRotMat();
+	transl.initTranslation(position.x, position.y, position.z);
+	return scale * rot * transl;
+}
+
+void RigidBodySystemSimulator::spawnBody() {
+	if (!m_newBodyPrepared) {
+		// TODO generate some random attributes
+
+		m_newBody_size = Vec3(0.5f, 0.3f, 0.2f);
+		m_newBody_orientation = Quat(M_PI * 0.5, M_PI * 0.3, M_PI * 0.2);
+		m_newBody_mass = 1.23f;
+		m_newBodyPrepared = true;
+	}
+
+	// try to spawn new body
+	const Vec3 spawnPos = Vec3(0.0f, 1.0f, 0.0f);
 	
-	//std:cerr << "\t pos=" << m_Bodies[1].position << "\t rot=" << m_Bodies[1].orientation << std::endl;
-	/*Quat cpy = Quat(m_Bodies[1].orientation);
-	cpy.unit();
-	std:cerr << "diff=" << (m_Bodies[1].orientation.normSq() - cpy.normSq()) << std::endl;*/
+	Mat4 newb_obj2world = constructObj2Wold(spawnPos, m_newBody_size, m_newBody_orientation);
 
-	// check collisions
-	// TODO optimize
+	bool safeToSpawn = true;
 	for (int i = 0; i < m_iCountBodies; i++) {
-		Body& b1 = m_Bodies[i];
+		Body& b = m_Bodies[i];
+		Mat4 b1_obj2world = constructObj2Wold(b.position, b.size, b.orientation);
 
-		Mat4 scale, rot, transl, b1_obj2world, b2_obj2world;
-		scale.initScaling(b1.size.x, b1.size.y, b1.size.z);
-		rot = b1.orientation.getRotMat();
-		transl.initTranslation(b1.position.x, b1.position.y, b1.position.z);
-		b1_obj2world = scale * rot * transl;
-
-		for (int o = i+1; o < m_iCountBodies; o++) {
-			Body& b2 = m_Bodies[o];
-
-			scale.initScaling(b2.size.x, b2.size.y, b2.size.z);
-			rot = b2.orientation.getRotMat();
-			transl.initTranslation(b2.position.x, b2.position.y, b2.position.z);
-			b2_obj2world = scale * rot * transl;
-
-
-			CollisionInfo col = checkCollisionSAT(b1_obj2world, b2_obj2world);
-
-			if (col.isValid) {
-				// calc velocities at collision point
-				Vec3 b1_relcolpos = col.collisionPointWorld - b1.position;
-				Vec3 b1_colvel = b1.linear_velocity + cross(b1.angular_velocity, b1_relcolpos);
-				Vec3 b2_relcolpos = col.collisionPointWorld - b2.position;
-				Vec3 b2_colvel = b2.linear_velocity + cross(b2.angular_velocity, b2_relcolpos);
-
-				// calc relvative velocity
-				Vec3 relcolvel = b1_colvel - b2_colvel;
-				
-				if (dot(col.normalWorld, relcolvel) < 0) { // actually colliding
-					/* calc impulse */
-					std::cerr << "collision!" << std::endl;
-
-					// calc CURRENT inverse inertia tensor
-					Mat4 b1_tensor = constructIIIT(b1.iiit, b1.orientation);
-					Mat4 b2_tensor = constructIIIT(b2.iiit, b2.orientation);
-
-					Vec3 b1_rot_change = cross(b1_tensor * (cross(b1_relcolpos, col.normalWorld)), b1_relcolpos);
-					Vec3 b2_rot_change = cross(b2_tensor * (cross(b2_relcolpos, col.normalWorld)), b2_relcolpos);
-
-					Real J = (-1.0 * (1.0 + (Real)m_fBounciness) * dot(relcolvel, col.normalWorld)) / ((Real)b1.invMass + (Real)b2.invMass + dot(b1_rot_change + b2_rot_change, col.normalWorld));
-
-
-					/* apply impuls */
-					b1.linear_velocity += (col.normalWorld * J) * (Real)b1.invMass;
-					b2.linear_velocity -= (col.normalWorld * J) * (Real)b2.invMass;
-
-					b1.angular_momentum += cross(b1_relcolpos, col.normalWorld * J);
-					b2.angular_momentum -= cross(b2_relcolpos, col.normalWorld * J);
-				}
-				// elseif >0 already separating
-				// elseif ==0 sliding contact
-
-			}
+		CollisionInfo col = checkCollisionSAT(b1_obj2world, newb_obj2world);
+		if (col.isValid) {
+			safeToSpawn = false;
+			break;
 		}
 	}
 
+	if (safeToSpawn) {
+		addRigidBody(spawnPos, m_newBody_size, m_newBody_mass);
+		setOrientationOf(m_iCountBodies - 1, m_newBody_orientation);
+		m_newBodyPrepared = false;
+	}
+}
+
+void RigidBodySystemSimulator::simulateTimestep(float timeStep)
+{
+	//  user interaction
+	Point2D mouseDiff;
+	Vec3 user_force;
+	// find a proper scale!
+	float inputScale = 0.001f;
+	mouseDiff.x = m_trackmouse.x - m_oldtrackmouse.x;
+	mouseDiff.y = m_trackmouse.y - m_oldtrackmouse.y;
+	if (m_iSelectedBody >= 0 && m_iSelectedBody < m_iCountBodies
+		&& (mouseDiff.x != 0 || mouseDiff.y != 0))
+	{
+		Mat4 worldViewInv = Mat4(DUC->g_camera.GetWorldMatrix() * DUC->g_camera.GetViewMatrix());
+		worldViewInv = worldViewInv.inverse();
+		Vec3 inputView = Vec3((float)mouseDiff.x, (float)-mouseDiff.y, 0);
+		user_force = worldViewInv.transformVectorNormal(inputView);
+		user_force = user_force * inputScale;
+
+		applyForceOnBody(m_iSelectedBody, m_Bodies[m_iSelectedBody].position, user_force);
+	}
+
+	if (m_iTestCase == 3) {
+		m_iCountBodiesTarget = min(m_iCountBodiesTarget, m_iMaxCountBodies);
+		if (m_iCountBodies < m_iCountBodiesTarget) {
+			spawnBody(); // try to spawn a body (success only if there is space)
+		}
+	}
 
 	// !! ONLY ONE LOOP !! =D
 	for (int i = 0; i < m_iCountBodies; i++) {
 		// external force/torque is already accumulated
 
 		/* update position */
-		// Note: Using bool<->int magic here to avoid branching
-		m_Bodies[i].position += (1 - m_Bodies[i].isFixed) * timeStep * m_Bodies[i].linear_velocity;
+		m_Bodies[i].position += timeStep * m_Bodies[i].linear_velocity;
 
 		/* update linear_velocity */
 		Vec3 acceleration = (m_Bodies[i].force * m_Bodies[i].invMass) + m_constantAcceleration;
-		m_Bodies[i].linear_velocity += timeStep * acceleration;
+		// Note: Using bool<->int magic here to avoid branching
+		m_Bodies[i].linear_velocity += (1 - m_Bodies[i].isFixed) * timeStep * acceleration;
 		// clear forces
 		m_Bodies[i].force = Vec3(0.0f);
 
@@ -344,6 +352,80 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 		m_Bodies[i].angular_velocity = tensor * m_Bodies[i].angular_momentum;
 	}
 
+
+
+
+	// check collisions
+	// TODO optimize
+	for (int i = 0; i < m_iCountBodies; i++) {
+		Body& b1 = m_Bodies[i];
+		Mat4 b1_obj2world = constructObj2Wold(b1.position, b1.size, b1.orientation);
+
+		for (int o = i + 1; o < m_iCountBodies; o++) {
+			Body& b2 = m_Bodies[o];
+			Mat4 b2_obj2world = constructObj2Wold(b2.position, b2.size, b2.orientation);
+
+			CollisionInfo col = checkCollisionSAT(b1_obj2world, b2_obj2world);
+
+			if (col.isValid) {
+				// calc velocities at collision point
+				Vec3 b1_relcolpos = col.collisionPointWorld - b1.position;
+				Vec3 b1_colvel = b1.linear_velocity + cross(b1.angular_velocity, b1_relcolpos);
+				Vec3 b2_relcolpos = col.collisionPointWorld - b2.position;
+				Vec3 b2_colvel = b2.linear_velocity + cross(b2.angular_velocity, b2_relcolpos);
+
+				// calc relvative velocity
+				Vec3 relcolvel = b1_colvel - b2_colvel;
+
+				float _dot = dot(col.normalWorld, relcolvel);
+				//if (fabsf(_dot) < FLT_EPSILON) { // ==0 sliding contact
+
+				//	std::cerr << "sliding!" << std::endl;
+
+				//}
+				//else 
+				if (_dot < 0.0f) { // actually colliding
+				   /* calc impulse */
+					std::cerr << "depth=" << col.depth << std::endl;
+
+					// calc CURRENT inverse inertia tensor
+					Mat4 b1_tensor = constructIIIT(b1.iiit, b1.orientation);
+					Mat4 b2_tensor = constructIIIT(b2.iiit, b2.orientation);
+
+					Vec3 b1_rot_change = cross(b1_tensor * (cross(b1_relcolpos, col.normalWorld)), b1_relcolpos);
+					Vec3 b2_rot_change = cross(b2_tensor * (cross(b2_relcolpos, col.normalWorld)), b2_relcolpos);
+
+					Real J = (-1.0 * (1.0 + (Real)m_fBounciness) * dot(relcolvel, col.normalWorld)) / ((Real)b1.invMass + (Real)b2.invMass + dot(b1_rot_change + b2_rot_change, col.normalWorld));
+
+					/* apply impuls */
+					b1.linear_velocity += (col.normalWorld * J) * (Real)b1.invMass;
+					b2.linear_velocity -= (col.normalWorld * J) * (Real)b2.invMass;
+
+					b1.angular_momentum += cross(b1_relcolpos, col.normalWorld * J);
+					b2.angular_momentum -= cross(b2_relcolpos, col.normalWorld * J);
+				}
+				// elseif >0 already separating
+
+				if (m_iTestCase == 3) { // we only do this in our own complex demo
+					// push bodies apart to fix ghosting through each other
+					const Real accepable_penetration = 0.0f;
+					if (col.depth > accepable_penetration) {
+						if (b2.isFixed) {
+							b1.position += col.normalWorld * ((Real)col.depth - accepable_penetration);
+						}
+						else if (b1.isFixed) {
+							b2.position -= col.normalWorld * ((Real)col.depth - accepable_penetration);
+						}
+						else {
+							b1.position += col.normalWorld * (0.5 * ((Real)col.depth - accepable_penetration));
+							b2.position -= col.normalWorld * (0.5 * ((Real)col.depth - accepable_penetration));
+						}
+					}
+				}
+
+			}
+		}
+	}
 }
 
 void RigidBodySystemSimulator::onClick(int x, int y)
@@ -431,6 +513,15 @@ void RigidBodySystemSimulator::addRigidBody(Vec3 position, Vec3 size, float mass
 	m_Bodies[m_iCountBodies].angular_velocity = Vec3(0.0f);
 	m_Bodies[m_iCountBodies].angular_momentum = Vec3(0.0f);
 	m_Bodies[m_iCountBodies].torque = Vec3(0.0f);
+
+	if (m_iSelectedBody == -1) {
+		if (m_iTestCase == 3) {
+			m_iSelectedBody = 1;
+		}
+		else {
+			m_iSelectedBody = m_iCountBodies;
+		}
+	}
 
 	m_iCountBodies++;
 }
