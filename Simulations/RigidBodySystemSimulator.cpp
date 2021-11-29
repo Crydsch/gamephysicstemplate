@@ -219,13 +219,14 @@ Mat4 constructIIIT(Vec3 iiit, Quat orientation) {
 	Mat4 i0, rot, rotT;
 	// construct I0^-1 matrix
 	i0.initScaling(iiit.x, iiit.y, iiit.z);
-	i0.value[3][3] = 0.0;
+	//i0.value[3][3] = 0.0;
 	// get rotation matrix
 	rotT = rot = orientation.getRotMat();
 	// transpose rotation matrix
 	rotT.transpose();
 	// calc inertia tensor
-	return rotT * i0 * rot; // TODO is this the right way round?
+	return rotT * i0 * rot; // TODO is this the right way round?  this looks better...
+	return rot * i0 * rotT; // TODO is this the right way round?
 }
 
 void RigidBodySystemSimulator::simulateTimestep(float timeStep)
@@ -274,6 +275,7 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 				
 				if (dot(col.normalWorld, relcolvel) < 0) { // actually colliding
 					/* calc impulse */
+					std::cerr << "collision!" << std::endl;
 
 					// calc CURRENT inverse inertia tensor
 					Mat4 b1_tensor = constructIIIT(b1.iiit, b1.orientation);
@@ -286,8 +288,8 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 
 
 					/* apply impuls */
-					b1.linear_velocity += (col.normalWorld * J) / b1.mass;
-					b2.linear_velocity -= (col.normalWorld * J) / b2.mass;
+					b1.linear_velocity += (col.normalWorld * J) * (Real)b1.invMass;
+					b2.linear_velocity -= (col.normalWorld * J) * (Real)b2.invMass;
 
 					b1.angular_momentum += cross(b1_relcolpos, col.normalWorld * J);
 					b2.angular_momentum -= cross(b2_relcolpos, col.normalWorld * J);
@@ -298,17 +300,18 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 			}
 		}
 	}
-	
+
 
 	// !! ONLY ONE LOOP !! =D
 	for (int i = 0; i < m_iCountBodies; i++) {
 		// external force/torque is already accumulated
 
 		/* update position */
-		m_Bodies[i].position += timeStep * m_Bodies[i].linear_velocity;
+		// Note: Using bool<->int magic here to avoid branching
+		m_Bodies[i].position += (1 - m_Bodies[i].isFixed) * timeStep * m_Bodies[i].linear_velocity;
 
 		/* update linear_velocity */
-		Vec3 acceleration = (m_Bodies[i].force / m_Bodies[i].mass) + m_constantAcceleration;
+		Vec3 acceleration = (m_Bodies[i].force * m_Bodies[i].invMass) + m_constantAcceleration;
 		m_Bodies[i].linear_velocity += timeStep * acceleration;
 		// clear forces
 		m_Bodies[i].force = Vec3(0.0f);
@@ -401,8 +404,9 @@ void RigidBodySystemSimulator::addRigidBody(Vec3 position, Vec3 size, float mass
 	m_Bodies[m_iCountBodies].position = position;
 	m_Bodies[m_iCountBodies].linear_velocity = Vec3(0.0f);
 	m_Bodies[m_iCountBodies].force = Vec3(0.0f);
-	m_Bodies[m_iCountBodies].mass = mass;
+	//m_Bodies[m_iCountBodies].mass = mass;
 
+	m_Bodies[m_iCountBodies].isFixed = isFixed;
 	if (isFixed) { // tricks for fixed bodies
 		m_Bodies[m_iCountBodies].invMass = 0.0f;
 		m_Bodies[m_iCountBodies].iiit = Vec3(0.0f);

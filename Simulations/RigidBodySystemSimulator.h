@@ -51,8 +51,9 @@ private:
 		Vec3 position; // of the center of mass!
 		Vec3 linear_velocity;
 		Vec3 force; // accumulated total external force to be applied in next simulation step
-		float mass; // we only consider the total mass (constant density throughout the box)
-		float invMass; // redundant, but avoids recalculation
+		//float mass; // we only consider the total mass (constant density throughout the box)
+		float invMass; // turns out we only need invMass
+		bool isFixed;
 
 		Quat orientation; // rotation around center of mass aka position
 		Vec3 angular_velocity;
