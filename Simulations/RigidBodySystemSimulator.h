@@ -35,9 +35,6 @@ public:
 
 private:
 	// Attributes
-	// add your RigidBodySystem data members, for e.g.,
-	// RigidBodySystem * m_pRigidBodySystem;
-	//Vec3 m_externalForce;
 
 	// UI Attributes
 	Point2D m_mouse;
@@ -78,6 +75,11 @@ private:
 	Vec3 m_newBody_size;
 	Quat m_newBody_orientation;
 	float m_newBody_mass;
+
+	float m_linearDamping;
+	float m_angularDamping;
+
+	float m_inputScale;
 
 	};
 #endif

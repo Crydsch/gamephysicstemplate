@@ -35,6 +35,11 @@ void RigidBodySystemSimulator::reset()
 	m_constantAcceleration = Vec3(0.0f);
 	m_newBodyPrepared = false;
 	m_iSelectedBody = -1;
+
+	m_linearDamping = 0.0f;
+	m_angularDamping = 0.0f;
+
+	m_inputScale = 0.01f;
 }
 
 const char* RigidBodySystemSimulator::getTestCasesStr()
@@ -126,13 +131,15 @@ void RigidBodySystemSimulator::notifyCaseChanged(int testCase)
 		addRigidBody(Vec3(0.0f, -1.0f, 0.0f), Vec3(10.0f, 1.1f, 10.0f), 1337.0f, true);
 
 		// enable gravity
-		m_constantAcceleration = Vec3(0.0f, -0.05f, 0.0f);
+		//m_constantAcceleration = Vec3(0.0f, -0.05f, 0.0f);
 
 		// take some energy out of the system
 		m_fBounciness = 0.7f;
+		m_linearDamping = 0.01f;
+		m_angularDamping = 0.01f;
 
 		// let the bodies hit the floooooooor!
-		m_iCountBodiesTarget = 2;
+		m_iCountBodiesTarget = 20;
 
 		break;
 
@@ -155,11 +162,18 @@ void RigidBodySystemSimulator::initUI(DrawingUtilitiesClass* DUC)
 	case 1: // Demo 2
 	case 2: // Demo 3
 		TwAddVarRW(DUC->g_pTweakBar, "Selected Body", TW_TYPE_INT32, &m_iSelectedBody, "step=1 min=0");
+		TwAddVarRW(DUC->g_pTweakBar, "Input Scale", TW_TYPE_FLOAT, &m_inputScale, "step=0.01 min=0.001");
 		break;
 	case 3: // Demo 4
 		TwAddVarRO(DUC->g_pTweakBar, "Bodies Count", TW_TYPE_INT32, &m_iCountBodies, "");
 		TwAddVarRW(DUC->g_pTweakBar, "Bodies Count Target", TW_TYPE_INT32, &m_iCountBodiesTarget, "step=1 min=1");
 		TwAddVarRW(DUC->g_pTweakBar, "Selected Body", TW_TYPE_INT32, &m_iSelectedBody, "step=1 min=1");
+
+		TwAddVarRW(DUC->g_pTweakBar, "Linear Damping", TW_TYPE_FLOAT, &m_linearDamping, "step=0.01 min=0.0");
+		TwAddVarRW(DUC->g_pTweakBar, "Angular Damping", TW_TYPE_FLOAT, &m_angularDamping, "step=0.01 min=0.0");
+		TwAddVarRW(DUC->g_pTweakBar, "Input Scale", TW_TYPE_FLOAT, &m_inputScale, "step=0.01 min=0.001");
+
+		//TwAddVarRW(DUC->g_pTweakBar, "Gravity", TW_TYPE_FLOAT, &(m_constantAcceleration.y), "step=0.01 min=0.0");
 		break;
 	default:
 		break;
@@ -248,18 +262,22 @@ Mat4 constructObj2Wold(Vec3 position, Vec3 size, Quat orientation) {
 	return scale * rot * transl;
 }
 
-void RigidBodySystemSimulator::spawnBody() {
-	if (!m_newBodyPrepared) {
-		// TODO generate some random attributes
+std::default_random_engine generator;
+std::uniform_real_distribution<float> size_dist(0.1f, 0.4f);
+std::uniform_real_distribution<float> rot_dist(0.0f, M_PI * 1.0f);
+std::uniform_real_distribution<float> mass_dist(0.5f, 2.0f);
 
-		m_newBody_size = Vec3(0.5f, 0.3f, 0.2f);
-		m_newBody_orientation = Quat(M_PI * 0.5, M_PI * 0.3, M_PI * 0.2);
-		m_newBody_mass = 1.23f;
+void RigidBodySystemSimulator::spawnBody() {
+
+	if (!m_newBodyPrepared) {
+		m_newBody_size = Vec3(size_dist(generator), size_dist(generator), size_dist(generator));
+		m_newBody_orientation = Quat(rot_dist(generator), rot_dist(generator), rot_dist(generator));
+		m_newBody_mass = mass_dist(generator);
 		m_newBodyPrepared = true;
 	}
 
 	// try to spawn new body
-	const Vec3 spawnPos = Vec3(0.0f, 1.0f, 0.0f);
+	const Vec3 spawnPos = Vec3(0.0f, 2.0f, 0.0f);
 	
 	Mat4 newb_obj2world = constructObj2Wold(spawnPos, m_newBody_size, m_newBody_orientation);
 
@@ -278,17 +296,16 @@ void RigidBodySystemSimulator::spawnBody() {
 	if (safeToSpawn) {
 		addRigidBody(spawnPos, m_newBody_size, m_newBody_mass);
 		setOrientationOf(m_iCountBodies - 1, m_newBody_orientation);
+		setVelocityOf(m_iCountBodies - 1, Vec3(0.0f, -0.2f, 0.0f));
 		m_newBodyPrepared = false;
 	}
 }
 
 void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 {
-	//  user interaction
+	// user interaction
 	Point2D mouseDiff;
 	Vec3 user_force;
-	// find a proper scale!
-	float inputScale = 0.001f;
 	mouseDiff.x = m_trackmouse.x - m_oldtrackmouse.x;
 	mouseDiff.y = m_trackmouse.y - m_oldtrackmouse.y;
 	if (m_iSelectedBody >= 0 && m_iSelectedBody < m_iCountBodies
@@ -298,7 +315,7 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 		worldViewInv = worldViewInv.inverse();
 		Vec3 inputView = Vec3((float)mouseDiff.x, (float)-mouseDiff.y, 0);
 		user_force = worldViewInv.transformVectorNormal(inputView);
-		user_force = user_force * inputScale;
+		user_force = user_force * m_inputScale;
 
 		applyForceOnBody(m_iSelectedBody, m_Bodies[m_iSelectedBody].position, user_force);
 	}
@@ -313,6 +330,10 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 	// !! ONLY ONE LOOP !! =D
 	for (int i = 0; i < m_iCountBodies; i++) {
 		// external force/torque is already accumulated
+		// damping
+		//  F_damp(t)=-m_fDamping*v(t)
+		m_Bodies[i].force += -m_linearDamping * m_Bodies[i].linear_velocity;
+		m_Bodies[i].torque += -m_angularDamping * m_Bodies[i].angular_velocity;
 
 		/* update position */
 		m_Bodies[i].position += timeStep * m_Bodies[i].linear_velocity;
@@ -353,10 +374,7 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 	}
 
 
-
-
 	// check collisions
-	// TODO optimize
 	for (int i = 0; i < m_iCountBodies; i++) {
 		Body& b1 = m_Bodies[i];
 		Mat4 b1_obj2world = constructObj2Wold(b1.position, b1.size, b1.orientation);
@@ -368,6 +386,11 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 			CollisionInfo col = checkCollisionSAT(b1_obj2world, b2_obj2world);
 
 			if (col.isValid) {
+				
+				/*if (col.collisionPointWorld.y < 0.0) {
+					col.collisionPointWorld.y = 0.0;
+				}*/
+
 				// calc velocities at collision point
 				Vec3 b1_relcolpos = col.collisionPointWorld - b1.position;
 				Vec3 b1_colvel = b1.linear_velocity + cross(b1.angular_velocity, b1_relcolpos);
@@ -378,15 +401,9 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 				Vec3 relcolvel = b1_colvel - b2_colvel;
 
 				float _dot = dot(col.normalWorld, relcolvel);
-				//if (fabsf(_dot) < FLT_EPSILON) { // ==0 sliding contact
-
-				//	std::cerr << "sliding!" << std::endl;
-
-				//}
-				//else 
 				if (_dot < 0.0f) { // actually colliding
 				   /* calc impulse */
-					std::cerr << "depth=" << col.depth << std::endl;
+					//std::cerr << "depth=" << col.depth << std::endl;
 
 					// calc CURRENT inverse inertia tensor
 					Mat4 b1_tensor = constructIIIT(b1.iiit, b1.orientation);
@@ -403,25 +420,46 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 
 					b1.angular_momentum += cross(b1_relcolpos, col.normalWorld * J);
 					b2.angular_momentum -= cross(b2_relcolpos, col.normalWorld * J);
+
+
+
 				}
 				// elseif >0 already separating
+				// elseif ==0 sliding contact
+
+				// x = len(depth)
+				// x = t*v v=x/t
+				// v = t*a a=x/t/t
+				// F = m*(a-g)
+				// g = (0,-1,0)
 
 				if (m_iTestCase == 3) { // we only do this in our own complex demo
-					// push bodies apart to fix ghosting through each other
-					const Real accepable_penetration = 0.0f;
+				// push bodies apart to fix ghosting through each other
+					const Real accepable_penetration = 0.00f;
 					if (col.depth > accepable_penetration) {
+						//const float necessary_acceleration = col.depth * norm(m_constantAcceleration) * 0.99f;
 						if (b2.isFixed) {
+							//applyForceOnBody(i, b1.position, col.normalWorld * necessary_acceleration * (1.0f / b1.invMass));
+							//applyForceOnBody(i, b1.position, col.normalWorld* ((Real)col.depth - accepable_penetration));
 							b1.position += col.normalWorld * ((Real)col.depth - accepable_penetration);
 						}
 						else if (b1.isFixed) {
+							//applyForceOnBody(o, b2.position, -col.normalWorld * necessary_acceleration * (1.0f / b2.invMass));
+							//applyForceOnBody(o, b2.position, -col.normalWorld * ((Real)col.depth - accepable_penetration));
 							b2.position -= col.normalWorld * ((Real)col.depth - accepable_penetration);
 						}
 						else {
+							//applyForceOnBody(i, b1.position, col.normalWorld * necessary_acceleration * (1.0f / b1.invMass));
+							//applyForceOnBody(o, b2.position, -col.normalWorld * necessary_acceleration * (1.0f / b2.invMass));
+							//applyForceOnBody(i, b1.position, col.normalWorld * ((Real)col.depth - accepable_penetration));
+							//applyForceOnBody(o, b2.position, -col.normalWorld * ((Real)col.depth - accepable_penetration));
 							b1.position += col.normalWorld * (0.5 * ((Real)col.depth - accepable_penetration));
 							b2.position -= col.normalWorld * (0.5 * ((Real)col.depth - accepable_penetration));
 						}
 					}
 				}
+
+				
 
 			}
 		}
