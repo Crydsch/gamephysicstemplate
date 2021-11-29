@@ -29,7 +29,7 @@ public:
 	Vec3 getLinearVelocityOfRigidBody(int i);
 	Vec3 getAngularVelocityOfRigidBody(int i);
 	void applyForceOnBody(int i, Vec3 loc, Vec3 force);
-	void addRigidBody(Vec3 position, Vec3 size, float mass);
+	void addRigidBody(Vec3 position, Vec3 size, float mass, bool isFixed = false);
 	void setOrientationOf(int i, Quat orientation);
 	void setVelocityOf(int i, Vec3 velocity); // linear velocity!
 
@@ -52,6 +52,7 @@ private:
 		Vec3 linear_velocity;
 		Vec3 force; // accumulated total external force to be applied in next simulation step
 		float mass; // we only consider the total mass (constant density throughout the box)
+		float invMass; // redundant, but avoids recalculation
 
 		Quat orientation; // rotation around center of mass aka position
 		Vec3 angular_velocity;
@@ -66,6 +67,9 @@ private:
 	int m_iCountBodies;
 	Body* m_Bodies;
 	float m_fBounciness;
+
+	int m_iCountBodiesTarget;
+	Vec3 m_constantAcceleration; // can be used for gravity (only applied to center of mass aka has no influence on rotation)
 
 	};
 #endif
