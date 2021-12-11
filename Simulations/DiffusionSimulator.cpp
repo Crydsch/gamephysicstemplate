@@ -2,9 +2,6 @@
 #include "pcgsolver.h"
 using namespace std;
 
-Grid::Grid() {
-}
-
 
 DiffusionSimulator::DiffusionSimulator()
 {
@@ -12,7 +9,10 @@ DiffusionSimulator::DiffusionSimulator()
 	m_vfMovableObjectPos = Vec3();
 	m_vfMovableObjectFinalPos = Vec3();
 	m_vfRotate = Vec3();
-	// to be implemented
+
+	m_fDiffusionCoefficient = 0.01;
+	m_iGridWidth = 16;
+	m_iGridHeight = 16;
 }
 
 const char * DiffusionSimulator::getTestCasesStr(){
@@ -24,12 +24,18 @@ void DiffusionSimulator::reset(){
 		m_trackmouse.x = m_trackmouse.y = 0;
 		m_oldtrackmouse.x = m_oldtrackmouse.y = 0;
 
+
+		T = new Grid(m_iGridWidth + 2, m_iGridHeight + 2);
 }
 
 void DiffusionSimulator::initUI(DrawingUtilitiesClass * DUC)
 {
 	this->DUC = DUC;
-	// to be implemented
+	TwAddSeparator(DUC->g_pTweakBar, "", "");
+	//TwAddVarRW(DUC->g_pTweakBar, "Maximum Heat", TW_TYPE_DOUBLE, &m_fMaxHeat, "step=10 min=1");
+	TwAddVarRW(DUC->g_pTweakBar, "Diffusion Coefficient", TW_TYPE_DOUBLE, &m_fDiffusionCoefficient, "step=0.01 min=0");
+	TwAddVarRW(DUC->g_pTweakBar, "Resolution Width", TW_TYPE_INT32, &m_iGridWidth, "step=1 min=0");
+	TwAddVarRW(DUC->g_pTweakBar, "Resolution Height", TW_TYPE_INT32, &m_iGridHeight, "step=1 min=0");
 }
 
 void DiffusionSimulator::notifyCaseChanged(int testCase)
@@ -37,9 +43,14 @@ void DiffusionSimulator::notifyCaseChanged(int testCase)
 	m_iTestCase = testCase;
 	m_vfMovableObjectPos = Vec3(0, 0, 0);
 	m_vfRotate = Vec3(0, 0, 0);
-	//
-	//to be implemented
-	//
+	
+	// setup something to diffuse
+	for (int x = 1; x < m_iGridWidth / 2; x++) {
+		for (int y = 1; y < m_iGridHeight / 2; y++) {
+			T->set(x, y, 1.0);
+		}
+	}
+
 	switch (m_iTestCase)
 	{
 	case 0:
@@ -54,10 +65,29 @@ void DiffusionSimulator::notifyCaseChanged(int testCase)
 	}
 }
 
-Grid* DiffusionSimulator::diffuseTemperatureExplicit() {//add your own parameters
-	Grid* newT = new Grid();
-	// to be implemented
-	//make sure that the temperature in boundary cells stays zero
+Grid* DiffusionSimulator::diffuseTemperatureExplicit(float timeStep) {
+	Grid* newT = new Grid(T->Width(), T->Height());
+	// Note: We only read from the boundary, we do not calc or set anything there
+
+	const Real dx = 1.0 / m_iGridWidth;
+	const Real dy = 1.0 / m_iGridHeight;
+	const Real dt = timeStep;
+
+	for (int x = 1; x <= m_iGridWidth; x++) {
+		for (int y = 1; y <= m_iGridHeight; y++) {
+
+			Real tmpX = T->get(x + 1, y) - 2 * T->get(x, y) + T->get(x - 1, y);
+			tmpX /= dx * dx;
+			Real tmpY = T->get(x, y + 1) - 2 * T->get(x, y) + T->get(x, y - 1);
+			tmpY /= dy * dy;
+			
+			Real tmp = (tmpX + tmpY) * m_fDiffusionCoefficient * dt;
+			tmp += T->get(x, y);
+
+			newT->set(x, y, tmp);
+		}
+	}
+
 	return newT;
 }
 
@@ -119,12 +149,14 @@ void DiffusionSimulator::diffuseTemperatureImplicit() {//add your own parameters
 
 void DiffusionSimulator::simulateTimestep(float timeStep)
 {
-	// to be implemented
-	// update current setup for each frame
+	Grid* tmp = NULL;
 	switch (m_iTestCase)
 	{
 	case 0:
-		T = diffuseTemperatureExplicit();
+		tmp = T;
+		T = diffuseTemperatureExplicit(timeStep);
+		delete(tmp); // don't leak memory!
+		tmp = NULL;
 		break;
 	case 1:
 		diffuseTemperatureImplicit();
@@ -132,10 +164,41 @@ void DiffusionSimulator::simulateTimestep(float timeStep)
 	}
 }
 
+Vec3 lerp(Vec3 a, Vec3 b, Real alpha) {
+	return a * (1.0 - alpha) + b * alpha;
+}
+
 void DiffusionSimulator::drawObjects()
 {
-	// to be implemented
-	//visualization
+	// Note: We render a sphere for each grid point with a color from red==hot to white==cold
+	// We render the grid in the middle of the unit cube
+
+	// TODO gray?
+	const Vec3 white = Vec3(0xFF, 0xFF, 0xFF) / 255.0f;
+	//const Vec3 red = Vec3(0xBB, 0x48, 0x44) / 255.0f; // #BB4844
+	const Vec3 red = Vec3(0xFF, 0x0, 0x0) / 255.0f; // #BB4844
+
+	/*DUC->setUpLighting(Vec3(), 0.4 * white, 100, 0.6 * white);
+	DUC->drawSphere(Vec3(-0.5, 0.5, 0.0), Vec3(0.05f));
+
+	DUC->setUpLighting(Vec3(), 0.4 * red, 100, 0.6 * red);
+	DUC->drawSphere(Vec3(0.5, -0.5, 0.0), Vec3(0.05f));*/
+
+	// render grid points
+	const Real offsetX = -0.5;
+	const Real offsetY = 0.5;
+	const Real dx = 1.0 / m_iGridWidth;
+	const Real dy = 1.0 / m_iGridHeight;
+
+	for (int x = 1; x <= m_iGridWidth; x++) {
+		for (int y = 1; y <= m_iGridHeight; y++) {
+			Vec3 pos = Vec3(offsetX + (x - 1) * dx, offsetY - (y - 1) * dx, 0.0);
+			Vec3 col = lerp(white, red, T->get(x, y));
+
+			DUC->setUpLighting(Vec3(), 0.4 * col, 100, 0.6 * col);
+			DUC->drawSphere(pos, Vec3(min(dx, dy)));
+		}
+	}
 }
 
 

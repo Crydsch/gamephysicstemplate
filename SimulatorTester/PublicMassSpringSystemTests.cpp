@@ -1,3 +1,5 @@
+#ifdef MASS_SPRING_SYSTEM
+
 #include "CppUnitTest.h"
 #include "MassSpringSystemSimulator.h"
 
@@ -122,3 +124,5 @@ namespace SimulatorTester
 
 	};
 }
+
+#endif

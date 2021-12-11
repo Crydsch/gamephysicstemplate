@@ -6,13 +6,71 @@
 
 //impement your own grid class for saving grid data
 class Grid {
+	/*
+	 * (0,0) ... (m,0)
+	 *  ...       ...
+	 * (0,n) ... (m,n)
+	 */
 public:
 	// Construtors
-	Grid();
+	Grid(int m, int n) : m(m), n(n) {
+		matrix = (Real*)calloc((size_t)m * (size_t)n, sizeof(Real));
+	}
 
+	~Grid() {
+		free(matrix);
+	}
+
+	Real get(int x, int y) {
+		// sanity check
+		if (x < 0 || x >= m || y < 0 || y >= n) {
+			std::cerr << "Invalid indices x=" << x << " y=" << y << " for matrix(" << m << "x" << n << ")" << std::endl;
+			return NAN;
+		}
+
+		return matrix[x + y * m];
+	}
+
+	void set(int x, int y, Real value) {
+		// sanity check
+		if (x < 0 || x >= m || y < 0 || y >= n) {
+			std::cerr << "Invalid indices x=" << x << " y=" << y << " for matrix(" << m << "x" << n << ")" << std::endl;
+		}
+
+		// Do not set values at boundary
+		if (x == 0 || x == m-1 || y == 0 || y == n-1) {
+			std::cerr << "Trying to set boundary at (" << x << "," << y << ") >:c" << std::endl;
+			return;
+		}
+
+		matrix[x + y * m] = value;
+	}
+
+	/*Real& at(int x, int y) {
+		// sanity check
+		if (x < 0 || x >= m || y < 0 || y >= n) {
+			std::cerr << "Invalid indices x=" << x << " y=" << y << " for matrix(" << m << "x" << n << ")" << std::endl;
+			static Real nan = NAN;
+			return nan;
+		}
+		
+		return matrix[x + y * m];
+	}*/
+
+	int Width() {
+		return m;
+	}
+
+	int Height() {
+		return n;
+	}
 
 private:
 	// Attributes
+	int m;
+	int n;
+
+	Real *matrix;
 };
 
 
@@ -34,7 +92,7 @@ public:
 	void onMouse(int x, int y);
 	// Specific Functions
 	void drawObjects();
-	Grid* diffuseTemperatureExplicit();
+	Grid* diffuseTemperatureExplicit(float timeStep);
 	void diffuseTemperatureImplicit();
 
 private:
@@ -45,7 +103,13 @@ private:
 	Point2D m_mouse;
 	Point2D m_trackmouse;
 	Point2D m_oldtrackmouse;
-	Grid *T; //save results of every time step
+	Grid *T; // save results of every time step
+	//Grid *T_b; // TODO Note: We swap between two grids, in order to avoid memory allocation each frame
+
+	Real m_fDiffusionCoefficient;
+	Real m_fMaxHeat;
+	int m_iGridWidth;
+	int m_iGridHeight;
 };
 
 #endif
