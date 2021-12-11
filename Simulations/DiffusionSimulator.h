@@ -95,6 +95,9 @@ public:
 	Grid* diffuseTemperatureExplicit(float timeStep);
 	void diffuseTemperatureImplicit();
 
+	int m_iGridWidth;
+	int m_iGridHeight;
+
 private:
 	// Attributes
 	Vec3  m_vfMovableObjectPos;
@@ -103,13 +106,13 @@ private:
 	Point2D m_mouse;
 	Point2D m_trackmouse;
 	Point2D m_oldtrackmouse;
-	Grid *T; // save results of every time step
-	//Grid *T_b; // TODO Note: We swap between two grids, in order to avoid memory allocation each frame
+	Grid *T[2]; // save results of every time step
+	int m_iCurrGrid; // Note: We swap between two grids, in order to avoid memory allocation each frame
 
 	Real m_fDiffusionCoefficient;
-	Real m_fMaxHeat;
-	int m_iGridWidth;
-	int m_iGridHeight;
+
+	void setupB(std::vector<Real>& b);
+	void fillT(std::vector<Real> x);
 };
 
 #endif
