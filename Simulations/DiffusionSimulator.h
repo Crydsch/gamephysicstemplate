@@ -3,6 +3,7 @@
 
 #include "Simulator.h"
 #include "vectorbase.h"
+#include "pcgsolver.h"
 
 //impement your own grid class for saving grid data
 class Grid {
@@ -93,7 +94,7 @@ public:
 	// Specific Functions
 	void drawObjects();
 	Grid* diffuseTemperatureExplicit(float timeStep);
-	void diffuseTemperatureImplicit();
+	void diffuseTemperatureImplicit(float timestep);
 
 	int m_iGridWidth;
 	int m_iGridHeight;
@@ -108,11 +109,18 @@ private:
 	Point2D m_oldtrackmouse;
 	Grid *T[2]; // save results of every time step
 	int m_iCurrGrid; // Note: We swap between two grids, in order to avoid memory allocation each frame
-
 	Real m_fDiffusionCoefficient;
 
-	void setupB(std::vector<Real>& b);
+	std::vector<Real>* b;
+	SparseMatrix<Real>* A;
+
+	int idx(int x, int y);
+	void setupB(std::vector<Real>& b, float timeStep);
 	void fillT(std::vector<Real> x);
+	void setupA(SparseMatrix<Real>& A, float timeStep);
+	void setupSimpleEnvironment();
+	void setupSimpleEnvironment_unstable();
+	void setupRandomEnvironment();
 };
 
 #endif

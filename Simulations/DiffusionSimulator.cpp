@@ -1,7 +1,8 @@
 #include "DiffusionSimulator.h"
-#include "pcgsolver.h"
+#include <random>
 using namespace std;
 
+extern float g_fTimestep; // this is in main.cpp
 
 DiffusionSimulator::DiffusionSimulator()
 {
@@ -15,13 +16,18 @@ DiffusionSimulator::DiffusionSimulator()
 	m_iGridHeight = 32;
 	T[0] = NULL;
 	T[1] = NULL;
+
+	A = NULL;
+	b = NULL;
 }
 
 const char * DiffusionSimulator::getTestCasesStr(){
-	return "Explicit_solver, Implicit_solver";
+	return "Explicit_solver (simple), Implicit_solver (simple), Explicit_solver (unstable), Implicit_solver (stable), Explicit_solver (random), Implicit_solver (random)";
 }
 
 void DiffusionSimulator::reset() {
+	g_fTimestep = 0.001; // reset defaults
+	m_fDiffusionCoefficient = 0.1;
 	m_mouse.x = m_mouse.y = 0;
 	m_trackmouse.x = m_trackmouse.y = 0;
 	m_oldtrackmouse.x = m_oldtrackmouse.y = 0;
@@ -31,6 +37,12 @@ void DiffusionSimulator::reset() {
 	if (T[1] != NULL) { delete(T[1]); }
 	T[1] = new Grid(m_iGridWidth + 2, m_iGridHeight + 2);
 	m_iCurrGrid = 0;
+
+	const int N = (m_iGridWidth + 2) * (m_iGridHeight + 2); // N = sizeX*sizeY*sizeZ
+	if (A != NULL) { delete(A); }
+	A = new SparseMatrix<Real>(N, 5);
+	if (b != NULL) { delete(b); }
+	b = new std::vector<Real>(N);
 }
 
 void cbSetResWidth(const void* value, void* clientData) {
@@ -66,14 +78,7 @@ void DiffusionSimulator::initUI(DrawingUtilitiesClass * DUC)
 	TwAddVarCB(DUC->g_pTweakBar, "Resolution Height", TW_TYPE_INT32, cbSetResHeight, cbGetResHeight, this, "step=1 min=4");
 }
 
-void DiffusionSimulator::notifyCaseChanged(int testCase)
-{
-	reset();
-
-	m_iTestCase = testCase;
-	m_vfMovableObjectPos = Vec3(0, 0, 0);
-	m_vfRotate = Vec3(0, 0, 0);
-	
+void DiffusionSimulator::setupSimpleEnvironment() {
 	/* setup something to diffuse */
 	// something hot
 	for (int x = 1; x < m_iGridWidth / 2; x++) {
@@ -87,14 +92,61 @@ void DiffusionSimulator::notifyCaseChanged(int testCase)
 			T[m_iCurrGrid]->set(x, y, -1.0);
 		}
 	}
+}
 
+void DiffusionSimulator::setupSimpleEnvironment_unstable() {
+	setupSimpleEnvironment();
+	g_fTimestep = 0.01;
+	m_fDiffusionCoefficient = 0.2;
+}
+
+// Ref.: https://www.cplusplus.com/reference/random/
+std::default_random_engine generator;
+std::uniform_real_distribution<Real> distribution(-1.0, 1.0);
+auto dice = std::bind(distribution, generator);
+
+void DiffusionSimulator::setupRandomEnvironment() {
+	/* setup something interesting to diffuse */
+	for (int x = 1; x <= m_iGridWidth; x++) {
+		for (int y = 1; y <= m_iGridHeight; y++) {
+			T[m_iCurrGrid]->set(x, y, dice());
+		}
+	}
+}
+
+void DiffusionSimulator::notifyCaseChanged(int testCase)
+{
+	reset();
+
+	m_iTestCase = testCase;
+	m_vfMovableObjectPos = Vec3(0, 0, 0);
+	m_vfRotate = Vec3(0, 0, 0);
+	
 	switch (m_iTestCase)
 	{
 	case 0:
-		cout << "Explicit solver!\n";
+		cout << "Explicit solver (simple)!\n";
+		setupSimpleEnvironment();
 		break;
 	case 1:
-		cout << "Implicit solver!\n";
+		cout << "Implicit solver (simple)!\n";
+		setupSimpleEnvironment();
+		break;
+	case 2:
+		cout << "Explicit solver (unstable)!\n";
+		setupSimpleEnvironment_unstable();
+		break;
+	case 3:
+		cout << "Implicit solver (stable)!\n";
+		setupSimpleEnvironment_unstable();
+		break;
+	case 4:
+		cout << "Explicit solver (random)!\n";
+		setupRandomEnvironment();
+		break;
+	case 5:
+		cout << "Implicit solver (random)!\n";
+		setupRandomEnvironment();
 		break;
 	default:
 		cout << "Empty Test!\n";
@@ -131,45 +183,85 @@ Grid* DiffusionSimulator::diffuseTemperatureExplicit(float timeStep) {
 	return newT;
 }
 
-void DiffusionSimulator::setupB(std::vector<Real>& b) {
+// transform x,y coordinates of the entire grid (incl. boundary)
+//  into linear index
+int DiffusionSimulator::idx(int x, int y) {
+	return x + y * (m_iGridWidth + 2);
+}
+
+void DiffusionSimulator::setupB(std::vector<Real>& b, float timeStep) {
 	// set vector B[sizeX*sizeY]
-	for (int x = 0; x < T[m_iCurrGrid]->Width(); x++) {
-		for (int y = 0; y < T[m_iCurrGrid]->Height(); y++) {
-			b.at(x * y) = T[m_iCurrGrid]->get(x, y);
+
+	// calc b vector from values at time t
+	// boundary cells =0
+
+	const Real dx = 1.0 / m_iGridWidth;
+	const Real dy = 1.0 / m_iGridHeight;
+	const Real s_x = (m_fDiffusionCoefficient * timeStep) / (dx * dx * 2); // scalar for values at x+1 (or x-1)
+	const Real s_y = (m_fDiffusionCoefficient * timeStep) / (dy * dy * 2); // scalar for values at y+1 (or y-1)
+	const Real s = 1.0 - 2 * s_x - 2 * s_y; // scala for values at x,y
+
+	for (size_t x = 1; x <= m_iGridWidth; x++) {
+		for (size_t y = 1; y <= m_iGridHeight; y++) {
+			b.at(idx(x, y)) = s * T[m_iCurrGrid]->get(x, y) +
+				s_x * T[m_iCurrGrid]->get(x-1, y) + s_x * T[m_iCurrGrid]->get(x+1, y) + s_y * T[m_iCurrGrid]->get(x, y-1) + s_y * T[m_iCurrGrid]->get(x, y+1);
+		}
+	}
+
+	// Better safe than sorry
+	// Set all boundary values to 0
+	for (size_t x = 0; x < T[m_iCurrGrid]->Width(); x+= T[m_iCurrGrid]->Width()-1) {
+		for (size_t y = 0; y < T[m_iCurrGrid]->Height(); y+= T[m_iCurrGrid]->Height()-1) {
+			b.at(idx(x, y)) = 0;
 		}
 	}
 }
 
 void DiffusionSimulator::fillT(std::vector<Real> res_x) {
 	// fill T with solved vector x
-	// make sure that the temperature in boundary cells stays zero
+	// make sure that the temperature in boundary cells stay zero
 	for (int x = 1; x <= m_iGridWidth; x++) {
-		for (int y = 1; y < m_iGridHeight; y++) {
-			Real val = res_x.at(x * y);
+		for (int y = 1; y <= m_iGridHeight; y++) {
+			Real val = res_x.at(idx(x, y));
 			T[m_iCurrGrid]->set(x, y, val);
 		}
 	}
 }
 
-void setupA(SparseMatrix<Real>& A, double factor) {
+void DiffusionSimulator::setupA(SparseMatrix<Real>& A, float timeStep) {
 	// setup Matrix A[sizeX*sizeY*sizeZ, sizeX*sizeY*sizeZ]
 	// set with:  A.set_element( index1, index2 , value );
 	// if needed, read with: A(index1, index2);
 	// avoid zero rows in A -> set the diagonal value for boundary cells to 1.0
-	for (int i = 0; i < 25; i++) {
+	for (int i = 0; i < A.n; i++) {
 			A.set_element(i, i, 1); // set diagonal
 	}
+
+	const Real w = T[m_iCurrGrid]->Width();
+
+	const Real dx = 1.0 / m_iGridWidth;
+	const Real dy = 1.0 / m_iGridHeight;
+	const Real s_x = -1.0 * (m_fDiffusionCoefficient * timeStep) / (dx * dx * 2); // scalar for values at x+1 (or x-1)
+	const Real s_y = -1.0 * (m_fDiffusionCoefficient * timeStep) / (dy * dy * 2); // scalar for values at y+1 (or y-1)
+	const Real s = 1.0 + 2 * -s_x + 2 * -s_y; // scalar for values at x,y
+
+	for (size_t x = 1; x <= m_iGridWidth; x++) {
+		for (size_t y = 1; y <= m_iGridHeight; y++) {
+			int i = idx(x, y);
+			A.set_element(i, i, s);
+			A.set_element(i, idx(x-1, y), s_x);
+			A.set_element(i, idx(x+1, y), s_x);
+			A.set_element(i, idx(x, y-1), s_y);
+			A.set_element(i, idx(x, y+1), s_y);
+		}
+	}
+
 }
 
-void DiffusionSimulator::diffuseTemperatureImplicit() {
+void DiffusionSimulator::diffuseTemperatureImplicit(float timeStep) {
 	// solve A T = b
-	// to be implemented
-	const int N = (m_iGridWidth+2) * (m_iGridHeight+2);//N = sizeX*sizeY*sizeZ
-	SparseMatrix<Real> *A = new SparseMatrix<Real> (N);
-	std::vector<Real> *b = new std::vector<Real>(N);
-
-	setupA(*A, 0.1);
-	setupB(*b);
+	setupA(*A, timeStep); // TODO only necessary when timeStep/gridsize changes/m_fDiffusionCoefficient
+	setupB(*b, timeStep);
 
 	// perform solve
 	Real pcg_target_residual = 1e-05;
@@ -180,6 +272,7 @@ void DiffusionSimulator::diffuseTemperatureImplicit() {
 	SparsePCGSolver<Real> solver;
 	solver.set_solver_parameters(pcg_target_residual, pcg_max_iterations, 0.97, 0.25);
 
+	const int N = T[m_iCurrGrid]->Width() * T[m_iCurrGrid]->Height(); // N = sizeX*sizeY*sizeZ
 	std::vector<Real> x(N);
 	for (int j = 0; j < N; ++j) { x[j] = 0.; }
 
@@ -189,22 +282,19 @@ void DiffusionSimulator::diffuseTemperatureImplicit() {
 	fillT(x);//copy x to T
 }
 
-
-
 void DiffusionSimulator::simulateTimestep(float timeStep)
 {
-	Grid* tmp = NULL;
 	switch (m_iTestCase)
 	{
 	case 0:
-		//tmp = T;
-		//T = diffuseTemperatureExplicit(timeStep);
-		//delete(tmp); // don't leak memory!
-		//tmp = NULL;
+	case 2:
+	case 4:
 		diffuseTemperatureExplicit(timeStep); // Note: we swap our grids internally
 		break;
 	case 1:
-		diffuseTemperatureImplicit();
+	case 3:
+	case 5:
+		diffuseTemperatureImplicit(timeStep);
 		break;
 	}
 }
