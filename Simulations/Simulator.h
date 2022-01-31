@@ -20,6 +20,7 @@ class Simulator{
 public:
 	// Attributes
 	int m_iTestCase;
+	bool render_floor;
 	DrawingUtilitiesClass * DUC;
 	// Functions
 	

@@ -191,6 +191,8 @@ public:
     bool IsMouseMButtonDown() const { return m_bMouseMButtonDown; }
     bool sMouseRButtonDown() const { return m_bMouseRButtonDown; }
 
+    DirectX::XMFLOAT3 m_vEye;               // Camera eye position
+
 protected:
     // Functions to map a WM_KEYDOWN key to a D3DUtil_CameraKeys enum
     virtual D3DUtil_CameraKeys MapKey( _In_ UINT nKey );
@@ -231,7 +233,6 @@ protected:
     float m_fFramesToSmoothMouseData;       // Number of frames to smooth mouse data over
     DirectX::XMFLOAT3 m_vDefaultEye;        // Default camera eye position
     DirectX::XMFLOAT3 m_vDefaultLookAt;     // Default LookAt position
-    DirectX::XMFLOAT3 m_vEye;               // Camera eye position
     DirectX::XMFLOAT3 m_vLookAt;            // LookAt position
     float m_fCameraYawAngle;                // Yaw angle of camera
     float m_fCameraPitchAngle;              // Pitch angle of camera

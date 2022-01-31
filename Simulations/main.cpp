@@ -18,13 +18,13 @@
 using namespace DirectX;
 using namespace GamePhysics;
 
-//#define ADAPTIVESTEP
+#define ADAPTIVESTEP
 
 //#define TEMPLATE_DEMO
 //#define MASS_SPRING_SYSTEM
 //#define RIGID_BODY_SYSTEM
 //#define SPH_SYSTEM
-#define DIFFUSION_SYSTEM
+#define BOUNCY_BOX
 
 #ifdef TEMPLATE_DEMO
 #include "TemplateSimulator.h"
@@ -33,26 +33,25 @@ using namespace GamePhysics;
 #include "MassSpringSystemSimulator.h"
 #endif
 #ifdef RIGID_BODY_SYSTEM
-//#include "RigidBodySystemSimulator.h"
+#include "RigidBodySystemSimulator.h"
 #endif
 #ifdef SPH_SYSTEM
-//#include "SPHSystemSimulator.h"
+#include "SPHSystemSimulator.h"
 #endif
-
-#ifdef DIFFUSION_SYSTEM
-#include "DiffusionSimulator.h"
+#ifdef BOUNCY_BOX
+#include "BouncyBoxSimulator.h"
 #endif
 
 DrawingUtilitiesClass * g_pDUC;
 Simulator * g_pSimulator;
-float 	g_fTimestep = 0.001;
+float 	g_fTimestep = 0.005;
 #ifdef ADAPTIVESTEP
-float   g_fTimeFactor = 1;
+float   g_fTimeFactor = 1.5;
 #endif
 bool  g_bDraw = true;
-int g_iTestCase = 0;
+int g_iTestCase = 1;
 int g_iPreTestCase = -1;
-bool  g_bSimulateByStep = false;
+bool g_bSimulateByStep = true;
 bool firstTime = true;
 // Video recorder
 FFmpeg* g_pFFmpegVideoRecorder = nullptr;
@@ -96,6 +95,7 @@ bool CALLBACK IsD3D11DeviceAcceptable( const CD3D11EnumAdapterInfo *AdapterInfo,
 //--------------------------------------------------------------------------------------
 bool CALLBACK ModifyDeviceSettings( DXUTDeviceSettings* pDeviceSettings, void* pUserContext )
 {
+	pDeviceSettings->d3d11.SyncInterval = 1; // NO MORE GPU ROOM HEATING aka enable vsync
 	return true;
 }
 
@@ -307,13 +307,13 @@ void CALLBACK OnD3D11FrameRender( ID3D11Device* pd3dDevice, ID3D11DeviceContext*
 	pd3dImmediateContext->ClearDepthStencilView( pDSV, D3D11_CLEAR_DEPTH, 1.0f, 0 );
 
     // Draw floor
-    g_pDUC->DrawFloor(pd3dImmediateContext);
+	if (g_pSimulator->render_floor) g_pDUC->DrawFloor(pd3dImmediateContext);
 
     // Draw axis box
-     g_pDUC->DrawBoundingBox(pd3dImmediateContext);
+    g_pDUC->DrawBoundingBox(pd3dImmediateContext);
 
 	// Draw Simulator
-	if(g_bDraw)g_pSimulator->drawFrame(pd3dImmediateContext);
+	if (g_bDraw) g_pSimulator->drawFrame(pd3dImmediateContext);
 
 	// Draw GUI
     TwDraw();
@@ -360,7 +360,7 @@ int main(int argc, char* argv[])
  	XMFLOAT3 eye(0.0f, 0.0f, -2.0f);
 	XMFLOAT3 lookAt(0.0f, 0.0f, 0.0f);
 	g_pDUC->g_camera.SetViewParams(XMLoadFloat3(&eye), XMLoadFloat3(&lookAt));
-	g_pDUC-> g_camera.SetButtonMasks(MOUSE_MIDDLE_BUTTON, MOUSE_WHEEL, MOUSE_RIGHT_BUTTON);
+	g_pDUC->g_camera.SetButtonMasks(MOUSE_MIDDLE_BUTTON, MOUSE_WHEEL, MOUSE_RIGHT_BUTTON);
 
 
 #ifdef TEMPLATE_DEMO
@@ -370,13 +370,13 @@ int main(int argc, char* argv[])
 	g_pSimulator= new MassSpringSystemSimulator();
 #endif
 #ifdef RIGID_BODY_SYSTEM
-	//g_pSimulator= new RigidBodySystemSimulator();
+	g_pSimulator= new RigidBodySystemSimulator();
 #endif
 #ifdef SPH_SYSTEM
-	//g_pSimulator= new SPHSystemSimulator();
+	g_pSimulator= new SPHSystemSimulator();
 #endif
-#ifdef DIFFUSION_SYSTEM
-	g_pSimulator= new DiffusionSimulator();
+#ifdef BOUNCY_BOX
+	g_pSimulator= new BouncyBoxSimulator();
 #endif
 	g_pSimulator->reset();
 
@@ -384,9 +384,9 @@ int main(int argc, char* argv[])
 	DXUTInit( true, true, NULL ); // Parse the command line, show msgboxes on error, no extra command line params
 	//DXUTSetIsInGammaCorrectMode( false ); // true by default (SRGB backbuffer), disable to force a RGB backbuffer
 	DXUTSetCursorSettings( true, true ); // Show the cursor and clip it when in full screen
-	DXUTCreateWindow( L"Demo" );
+	DXUTCreateWindow( L"Bouncy Boxes" );
 	DXUTCreateDevice( D3D_FEATURE_LEVEL_11_0, true, 1280, 960 );
-    
+	
 	DXUTMainLoop(); // Enter into the DXUT render loop
 	DXUTShutdown(); // Shuts down DXUT (includes calls to OnD3D11ReleasingSwapChain() and OnD3D11DestroyDevice())
 	

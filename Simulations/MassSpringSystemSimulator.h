@@ -7,12 +7,13 @@
 #define LEAPFROG 1
 #define MIDPOINT 2
 // Do Not Change
-
+#define NO_INTEGRATOR 1337
 
 class MassSpringSystemSimulator:public Simulator{
 public:
 	// Construtors
-	MassSpringSystemSimulator();
+	MassSpringSystemSimulator(int maxCountMassPoints = 10000, int maxCountSprings = 10000);
+	MassSpringSystemSimulator::~MassSpringSystemSimulator();
 	
 	// UI Functions
 	const char * getTestCasesStr();
@@ -26,21 +27,40 @@ public:
 	void onMouse(int x, int y);
 
 	// Specific Functions
+	// setMass(..) can be used in conjunction with addMassPoint(..)
+	//  all subsequent added mass points will have the before set mass.
 	void setMass(float mass);
-	void setStiffness(float stiffness);
-	void setDampingFactor(float damping);
 	int addMassPoint(Vec3 position, Vec3 Velocity, bool isFixed);
-	void addSpring(int masspoint1, int masspoint2, float initialLength);
 	int getNumberOfMassPoints();
+	// setStiffness(..) can be used in conjunction with addSpring(..)
+	//  all subsequent added springs will have the before set stiffness.
+	void setStiffness(float stiffness);
+	// Note: If initialLength is negative, we use the current masspoint distance as spring length
+	void addSpring(int masspoint1, int masspoint2, float initialLength);
 	int getNumberOfSprings();
+	// Sets a global damping factor (aka friction).
+	void setDampingFactor(float damping);
 	Vec3 getPositionOfMassPoint(int index);
 	Vec3 getVelocityOfMassPoint(int index);
+	// This adds a global external force which is applied to every
+	//  every masspoint in every timestep.
+	// Note: This can be used for gravity, but only if all masspoints have the same mass!
+	// => Use setConstantAcceleration instead!
 	void applyExternalForce(Vec3 force);
 	
 	// Do Not Change
 	void setIntegrator(int integrator) {
 		m_iIntegrator = integrator;
 	}
+
+	// Custom Functions
+	int addMassPoint(float mass, Vec3 position, Vec3 velocity, bool isFixed);
+	// Note: if initialLength is negative, we use the current masspoint distance as spring length
+	void addSpring(float stiffness, int masspoint1, int masspoint2, float initialLength);
+	// Set an acceleration that is applied to every masspoint in every timestep
+	// This can be used for gravity!
+	void setConstantAcceleration(Vec3 acceleration);
+
 
 private:
 	// Data Attributes
@@ -54,5 +74,48 @@ private:
 	Point2D m_mouse;
 	Point2D m_trackmouse;
 	Point2D m_oldtrackmouse;
+
+	// Custom Attributes
+	struct mass_point_t {
+		float mass;
+		Vec3 position;
+		Vec3 velocity;
+		bool isFixed;
+
+		Vec3 force;
+		Vec3 acceleration;
+
+		// used only for midpoint integration
+		Vec3 tmp_position;
+		Vec3 tmp_velocity;
+	};
+	typedef struct mass_point_t MassPoint;
+
+	struct spring_t {
+		float stiffness;
+		int masspoint1;
+		int masspoint2;
+		float length; // length at rest aka desired length
+	};
+	typedef struct spring_t Spring;
+
+	int m_iMaxCountMassPoints;
+	int m_iMaxCountSprings;
+	int m_iCountMassPoints;
+	int m_iCountSprings;
+	MassPoint *m_MassPoints;
+	Spring* m_Springs;
+	Vec3 m_constantAcceleration;
+
+	// Cube simulation
+	float m_fCubeSize;
+	int m_iCubeResolution;
+	int m_mainPoint;
+
+	// Custom Functions
+	void clampMassPointsToBox(Vec3 pMin, Vec3 pMax);
+	void clampTmpMassPointsToBox(Vec3 pMin, Vec3 pMax);
+	void addCube();
+
 };
 #endif
