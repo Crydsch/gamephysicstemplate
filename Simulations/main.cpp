@@ -18,7 +18,7 @@
 using namespace DirectX;
 using namespace GamePhysics;
 
-//#define ADAPTIVESTEP
+#define ADAPTIVESTEP
 
 //#define TEMPLATE_DEMO
 #define MASS_SPRING_SYSTEM
@@ -42,7 +42,7 @@ DrawingUtilitiesClass * g_pDUC;
 Simulator * g_pSimulator;
 float 	g_fTimestep = 0.005;
 #ifdef ADAPTIVESTEP
-float   g_fTimeFactor = 1;
+float   g_fTimeFactor = 2;
 #endif
 bool  g_bDraw = true;
 int g_iTestCase = 0;
@@ -91,6 +91,7 @@ bool CALLBACK IsD3D11DeviceAcceptable( const CD3D11EnumAdapterInfo *AdapterInfo,
 //--------------------------------------------------------------------------------------
 bool CALLBACK ModifyDeviceSettings( DXUTDeviceSettings* pDeviceSettings, void* pUserContext )
 {
+	pDeviceSettings->d3d11.SyncInterval = 1; // NO MORE GPU ROOM HEATING aka enable vsync
 	return true;
 }
 

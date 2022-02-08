@@ -27,8 +27,6 @@ MassSpringSystemSimulator::~MassSpringSystemSimulator() {
 
 void MassSpringSystemSimulator::reset()
 {
-	//std::cerr << "reset()" << std::endl;
-
 	m_fMass = 0.0f;
 	m_fStiffness = 0.0f;
 	m_fDamping = 0.0f;
@@ -58,9 +56,7 @@ extern int g_iTestCase;
 
 void MassSpringSystemSimulator::notifyCaseChanged(int testCase)
 {
-	//std::cerr << "notifyCaseChanged(" << testCase << ")" << std::endl;
 	// Called to initialize new TestCase
-	
 	reset();
 
 	m_iTestCase = testCase;
@@ -175,7 +171,6 @@ void MassSpringSystemSimulator::addCube() {
 		for (int y = 0; y < res; y++) {
 			for (int z = 0; z < res; z++) {
 				int mp1 = points[x + res * y + res * res * z];
-				//std::cerr << "# " << mp1 << ":" << std::endl;
 
 				// for all neighbours
 				for (int dx = -1; dx <= 1; dx++) {
@@ -191,7 +186,6 @@ void MassSpringSystemSimulator::addCube() {
 								nz >= 0 && nz < res &&
 								!(nx == x && ny == y && nz == z)) {
 								int mp2 = points[nx + res * ny + res * res * nz];
-								//std::cerr << dx << "\t" << dy << "\t" << dz << std::endl;
 
 								// if no spring yet, add one
 								if (springs.find(springID(mp1, mp2)) == springs.end() &&
@@ -222,37 +216,12 @@ void MassSpringSystemSimulator::initUI(DrawingUtilitiesClass* DUC)
 	TwAddButton(DUC->g_pTweakBar, "Use MIDPOINT", [](void* s) { *((int*)s) = MIDPOINT; }, &m_iIntegrator, "");
 	// damping
 	TwAddVarRW(DUC->g_pTweakBar, "Damping Factor", TW_TYPE_FLOAT, &m_fDamping, "step=0.05 min=0.0");
-
-	switch (m_iTestCase)
-	{
-	case 0: // Demo 1: Nothing rendered
-		break;
-	case 1: // Demo 2: Just render simple EULER simulation
-	case 2: // Demo 3: Just render simple MIDPOINT simulation
-		// Render options: TODO
-		//  render masspoint mass depending on radius
-		//   float radius_factor, radius_mass_factor
-		//  render spring thickness depending on stiffness
-		//  render spring color depending on generated force
-
-		break;
-	case 3:
-		// prob, have to be callbacks
-		//TwAddVarRW(DUC->g_pTweakBar, "Cube Size", TW_TYPE_FLOAT, &m_iCubeSize, "min=0.5 step=0.1");
-		//TwAddVarRW(DUC->g_pTweakBar, "Cube Resolution", TW_TYPE_INT32, &m_iCubeResolution, "min=2");
-		break;
-	default:
-		break;
-	}
 }
 
 void MassSpringSystemSimulator::drawFrame(ID3D11DeviceContext* pd3dImmediateContext)
 {
-	// We always render all MassPoints as spheres (BONUS: radius == mass)
-	//  and all Springs als lines between the spheres (BONUS: thickness == stiffness, color == force generated)
-
-	//const Vec3 turquoise = Vec3(64.0f / 255.0f, 224.0f / 255.0f, 208.0f / 255.0f);
-	//const Vec3 darkturquoise = Vec3(0.0f, 206.0f / 255.0f, 209.0f / 255.0f);
+	// We always render all MassPoints as spheres
+	//  and all Springs als lines between the spheres
 
 	const Vec3 lilac = Vec3(0x7D, 0x4F, 0xB0) / 255.0f; // #7D4FB0
 	const Vec3 lightlilac = Vec3(0x90, 0x68, 0xBB) / 255.0f; // #9068BB
@@ -331,13 +300,7 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 			- Combine for loops where applicable
 			- Maybe split fixed points from normal points and get rid of branch prediction
 			   (also saves space since fixpoints dont need force/accel/vel)
-			- cache optimize/pack masspoints and spring arrays
-		*/
-		/* TODO:
 		    - Change safe devide to normal one, since mass > 0
-			- Add collision detection
-			- Add external forces (gravity as direct accel)
-			- Add damping
 		*/
 
 		// DO EULER STEP
@@ -580,7 +543,6 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 			}
 		}
 
-
 		/* update velocity with acceleration at(t + h / 2) */
 		//  v(t+h) = v(0) + h * a(t+h/2)
 		for (int i = 0; i < m_iCountMassPoints; i++) {
@@ -607,17 +569,13 @@ void MassSpringSystemSimulator::simulateTimestep(float timeStep)
 
 void MassSpringSystemSimulator::onClick(int x, int y)
 {
-	//std::cerr << "onClick(" << x << "," << y << ")" << std::endl;
 	// Called WHILE mouse is clicked
-
 	m_trackmouse = { x, y };
 }
 
 void MassSpringSystemSimulator::onMouse(int x, int y)
 {
-	//std::cerr << "onMouse(" << x << "," << y << ")" << std::endl;
 	// Called WHILE mouse is NOT clicked
-
 	m_oldtrackmouse = { x, y };
 	m_trackmouse = { x, y };
 }
@@ -754,7 +712,7 @@ void MassSpringSystemSimulator::applyExternalForce(Vec3 force)
 	// Sets static global external force (aka gravity)
 	// will be applied to every mass point, every time step
 	// Note: A real force would be mass dependent,
-	// => You should not use this function. 
+	// => You should not use this function.
 	m_externalForce = force;
 }
 
