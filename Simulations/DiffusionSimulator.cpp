@@ -4,6 +4,11 @@ using namespace std;
 
 extern float g_fTimestep; // this is in main.cpp
 
+// Ref.: https://www.cplusplus.com/reference/random/
+std::default_random_engine generator;
+std::uniform_real_distribution<Real> distribution(-1.0, 1.0);
+auto dice = std::bind(distribution, generator);
+
 DiffusionSimulator::DiffusionSimulator()
 {
 	m_iTestCase = 0;
@@ -71,9 +76,7 @@ void DiffusionSimulator::initUI(DrawingUtilitiesClass * DUC)
 {
 	this->DUC = DUC;
 	TwAddSeparator(DUC->g_pTweakBar, "", "");
-	TwAddVarRW(DUC->g_pTweakBar, "Diffusion Coefficient", TW_TYPE_DOUBLE, &m_fDiffusionCoefficient, "step=0.01 min=0");
-	//TwAddVarRW(DUC->g_pTweakBar, "Resolution Width", TW_TYPE_INT32, &m_iGridWidth, "step=1 min=4");
-	//TwAddVarRW(DUC->g_pTweakBar, "Resolution Height", TW_TYPE_INT32, &m_iGridHeight, "step=1 min=4");
+	TwAddVarRW(DUC->g_pTweakBar, "Diffusion Coefficient", TW_TYPE_DOUBLE, &m_fDiffusionCoefficient, "step=0.1 min=0");
 	TwAddVarCB(DUC->g_pTweakBar, "Resolution Width", TW_TYPE_INT32, cbSetResWidth, cbGetResWidth, this, "step=1 min=4");
 	TwAddVarCB(DUC->g_pTweakBar, "Resolution Height", TW_TYPE_INT32, cbSetResHeight, cbGetResHeight, this, "step=1 min=4");
 }
@@ -99,11 +102,6 @@ void DiffusionSimulator::setupSimpleEnvironment_unstable() {
 	g_fTimestep = 0.01;
 	m_fDiffusionCoefficient = 0.2;
 }
-
-// Ref.: https://www.cplusplus.com/reference/random/
-std::default_random_engine generator;
-std::uniform_real_distribution<Real> distribution(-1.0, 1.0);
-auto dice = std::bind(distribution, generator);
 
 void DiffusionSimulator::setupRandomEnvironment() {
 	/* setup something interesting to diffuse */
@@ -199,7 +197,7 @@ void DiffusionSimulator::setupB(std::vector<Real>& b, float timeStep) {
 	const Real dy = 1.0 / m_iGridHeight;
 	const Real s_x = (m_fDiffusionCoefficient * timeStep) / (dx * dx * 2); // scalar for values at x+1 (or x-1)
 	const Real s_y = (m_fDiffusionCoefficient * timeStep) / (dy * dy * 2); // scalar for values at y+1 (or y-1)
-	const Real s = 1.0 - 2 * s_x - 2 * s_y; // scala for values at x,y
+	const Real s = 1.0 - 2 * s_x - 2 * s_y; // scalar for values at x,y
 
 	for (size_t x = 1; x <= m_iGridWidth; x++) {
 		for (size_t y = 1; y <= m_iGridHeight; y++) {
@@ -260,7 +258,7 @@ void DiffusionSimulator::setupA(SparseMatrix<Real>& A, float timeStep) {
 
 void DiffusionSimulator::diffuseTemperatureImplicit(float timeStep) {
 	// solve A T = b
-	setupA(*A, timeStep); // TODO only necessary when timeStep/gridsize changes/m_fDiffusionCoefficient
+	setupA(*A, timeStep);
 	setupB(*b, timeStep);
 
 	// perform solve

@@ -36,6 +36,7 @@ public:
 		// sanity check
 		if (x < 0 || x >= m || y < 0 || y >= n) {
 			std::cerr << "Invalid indices x=" << x << " y=" << y << " for matrix(" << m << "x" << n << ")" << std::endl;
+			return;
 		}
 
 		// Do not set values at boundary
@@ -46,17 +47,6 @@ public:
 
 		matrix[x + y * m] = value;
 	}
-
-	/*Real& at(int x, int y) {
-		// sanity check
-		if (x < 0 || x >= m || y < 0 || y >= n) {
-			std::cerr << "Invalid indices x=" << x << " y=" << y << " for matrix(" << m << "x" << n << ")" << std::endl;
-			static Real nan = NAN;
-			return nan;
-		}
-		
-		return matrix[x + y * m];
-	}*/
 
 	int Width() {
 		return m;
