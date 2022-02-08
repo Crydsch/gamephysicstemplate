@@ -1,6 +1,11 @@
 #include "RigidBodySystemSimulator.h"
 #include "collisionDetect.h"
 
+std::default_random_engine generator;
+std::uniform_real_distribution<float> size_dist(0.1f, 0.4f);
+std::uniform_real_distribution<float> rot_dist(0.0f, M_PI * 1.0f);
+std::uniform_real_distribution<float> mass_dist(0.5f, 2.0f);
+
 RigidBodySystemSimulator::RigidBodySystemSimulator(int maxCountBodies)
 {
 	m_iMaxCountBodies = maxCountBodies;
@@ -19,8 +24,6 @@ RigidBodySystemSimulator::~RigidBodySystemSimulator()
 
 void RigidBodySystemSimulator::reset()
 {
-	//std::cerr << "reset()" << std::endl;
-
 	m_mouse = { 0, 0 };
 	m_trackmouse = { 0, 0 };
 	m_oldtrackmouse = { 0, 0 };
@@ -54,9 +57,7 @@ extern int g_iTestCase;
 
 void RigidBodySystemSimulator::notifyCaseChanged(int testCase)
 {
-	//std::cerr << "notifyCaseChanged(" << testCase << ")" << std::endl;
 	// Called to initialize new TestCase
-
 	reset();
 
 	m_iTestCase = testCase;
@@ -250,8 +251,7 @@ Mat4 constructIIIT(Vec3 iiit, Quat orientation) {
 	// transpose rotation matrix
 	rotT.transpose();
 	// calc inertia tensor
-	return rotT * i0 * rot; // TODO is this the right way round?  this looks better...
-	return rot * i0 * rotT; // TODO is this the right way round?
+	return rot * i0 * rotT;
 }
 
 Mat4 constructObj2Wold(Vec3 position, Vec3 size, Quat orientation) {
@@ -261,11 +261,6 @@ Mat4 constructObj2Wold(Vec3 position, Vec3 size, Quat orientation) {
 	transl.initTranslation(position.x, position.y, position.z);
 	return scale * rot * transl;
 }
-
-std::default_random_engine generator;
-std::uniform_real_distribution<float> size_dist(0.1f, 0.4f);
-std::uniform_real_distribution<float> rot_dist(0.0f, M_PI * 1.0f);
-std::uniform_real_distribution<float> mass_dist(0.5f, 2.0f);
 
 void RigidBodySystemSimulator::spawnBody() {
 
@@ -386,11 +381,6 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 			CollisionInfo col = checkCollisionSAT(b1_obj2world, b2_obj2world);
 
 			if (col.isValid) {
-				
-				/*if (col.collisionPointWorld.y < 0.0) {
-					col.collisionPointWorld.y = 0.0;
-				}*/
-
 				// calc velocities at collision point
 				Vec3 b1_relcolpos = col.collisionPointWorld - b1.position;
 				Vec3 b1_colvel = b1.linear_velocity + cross(b1.angular_velocity, b1_relcolpos);
@@ -403,7 +393,6 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 				float _dot = dot(col.normalWorld, relcolvel);
 				if (_dot < 0.0f) { // actually colliding
 				   /* calc impulse */
-					//std::cerr << "depth=" << col.depth << std::endl;
 
 					// calc CURRENT inverse inertia tensor
 					Mat4 b1_tensor = constructIIIT(b1.iiit, b1.orientation);
@@ -427,32 +416,18 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 				// elseif >0 already separating
 				// elseif ==0 sliding contact
 
-				// x = len(depth)
-				// x = t*v v=x/t
-				// v = t*a a=x/t/t
-				// F = m*(a-g)
-				// g = (0,-1,0)
-
 				if (m_iTestCase == 3) { // we only do this in our own complex demo
 				// push bodies apart to fix ghosting through each other
 					const Real accepable_penetration = 0.00f;
 					if (col.depth > accepable_penetration) {
 						//const float necessary_acceleration = col.depth * norm(m_constantAcceleration) * 0.99f;
 						if (b2.isFixed) {
-							//applyForceOnBody(i, b1.position, col.normalWorld * necessary_acceleration * (1.0f / b1.invMass));
-							//applyForceOnBody(i, b1.position, col.normalWorld* ((Real)col.depth - accepable_penetration));
 							b1.position += col.normalWorld * ((Real)col.depth - accepable_penetration);
 						}
 						else if (b1.isFixed) {
-							//applyForceOnBody(o, b2.position, -col.normalWorld * necessary_acceleration * (1.0f / b2.invMass));
-							//applyForceOnBody(o, b2.position, -col.normalWorld * ((Real)col.depth - accepable_penetration));
 							b2.position -= col.normalWorld * ((Real)col.depth - accepable_penetration);
 						}
 						else {
-							//applyForceOnBody(i, b1.position, col.normalWorld * necessary_acceleration * (1.0f / b1.invMass));
-							//applyForceOnBody(o, b2.position, -col.normalWorld * necessary_acceleration * (1.0f / b2.invMass));
-							//applyForceOnBody(i, b1.position, col.normalWorld * ((Real)col.depth - accepable_penetration));
-							//applyForceOnBody(o, b2.position, -col.normalWorld * ((Real)col.depth - accepable_penetration));
 							b1.position += col.normalWorld * (0.5 * ((Real)col.depth - accepable_penetration));
 							b2.position -= col.normalWorld * (0.5 * ((Real)col.depth - accepable_penetration));
 						}
@@ -468,17 +443,13 @@ void RigidBodySystemSimulator::simulateTimestep(float timeStep)
 
 void RigidBodySystemSimulator::onClick(int x, int y)
 {
-	//std::cerr << "onClick(" << x << "," << y << ")" << std::endl;
 	// Called WHILE mouse is clicked
-
 	m_trackmouse = { x, y };
 }
 
 void RigidBodySystemSimulator::onMouse(int x, int y)
 {
-	//std::cerr << "onMouse(" << x << "," << y << ")" << std::endl;
 	// Called WHILE mouse is NOT clicked
-
 	m_oldtrackmouse = { x, y };
 	m_trackmouse = { x, y };
 }

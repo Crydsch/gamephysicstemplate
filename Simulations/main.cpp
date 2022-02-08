@@ -40,7 +40,7 @@ using namespace GamePhysics;
 
 DrawingUtilitiesClass * g_pDUC;
 Simulator * g_pSimulator;
-float 	g_fTimestep = 0.01;// 0.1;
+float 	g_fTimestep = 0.1;
 #ifdef ADAPTIVESTEP
 float   g_fTimeFactor = 1;
 #endif
@@ -91,7 +91,7 @@ bool CALLBACK IsD3D11DeviceAcceptable( const CD3D11EnumAdapterInfo *AdapterInfo,
 //--------------------------------------------------------------------------------------
 bool CALLBACK ModifyDeviceSettings( DXUTDeviceSettings* pDeviceSettings, void* pUserContext )
 {
-	//pDeviceSettings->d3d11.SyncInterval = 1; // NO MORE GPU ROOM HEATING aka enable vsync
+	pDeviceSettings->d3d11.SyncInterval = 1; // NO MORE GPU ROOM HEATING aka enable vsync
 	return true;
 }
 
